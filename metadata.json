@@ -1,0 +1,5 @@
+{
+  "name": "Ad Hoc Network Simulator",
+  "description": "An advanced network simulation tool to design, analyze, and optimize ad hoc networks. Features a code-based environment and a visual drag-and-drop builder to model topologies, simulate performance based on AI-enhanced routing protocols, and generate detailed analytical reports with graphical visualizations.",
+  "requestFramePermissions": []
+}
