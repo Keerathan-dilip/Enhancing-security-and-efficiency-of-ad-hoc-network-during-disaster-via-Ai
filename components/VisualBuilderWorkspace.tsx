@@ -7,6 +7,27 @@ import ReportDashboard from './ReportDashboard';
 import { networkAnalysisService } from '../services/networkAnalysisService';
 import { geminiService } from '../services/geminiService';
 
+const WEAK_NODE_EFFICIENCY_THRESHOLD = 85;
+
+const FormattedDescription: React.FC<{ text: string }> = ({ text }) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g).filter(part => part.length > 0);
+  
+    return (
+      <p className="text-sm text-gray-300 whitespace-pre-wrap">
+        {parts.map((part, index) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return (
+              <strong key={index} className="font-bold text-cyan-400">
+                {part.substring(2, part.length - 2)}
+              </strong>
+            );
+          }
+          return part;
+        })}
+      </p>
+    );
+};
+
 const VisualBuilderWorkspace: React.FC = () => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -165,7 +186,7 @@ const VisualBuilderWorkspace: React.FC = () => {
       const description = await geminiService.getTopologyDescription(topology);
       setAnalysisResult({ topology, description });
 
-      const params = networkAnalysisService.simulatePerformance(topology, nodes.length);
+      const params = networkAnalysisService.simulatePerformance(topology, nodes, connections);
       setSimulationParams(params);
     } catch (error) {
       console.error("Analysis failed:", error);
@@ -174,8 +195,24 @@ const VisualBuilderWorkspace: React.FC = () => {
       setIsAnalyzing(false);
     }
   };
+
+  const handleReconstruct = useCallback(() => {
+    const weakNodeIds = nodes
+      .filter(n => n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD)
+      .map(n => n.id);
+
+    if (weakNodeIds.length === 0) return;
+
+    setNodes(prevNodes => prevNodes.filter(n => !weakNodeIds.includes(n.id)));
+    setConnections(prevConnections => 
+      prevConnections.filter(c => !weakNodeIds.includes(c.from) && !weakNodeIds.includes(c.to))
+    );
+    setSelectedNodeId(null);
+    alert(`Removed ${weakNodeIds.length} weaker node(s) and reconstructed the network.`);
+  }, [nodes]);
   
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
+  const weakNodes = nodes.filter(n => n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD);
 
   return (
     <div className="h-full flex flex-col gap-4 animate-fadeIn">
@@ -190,8 +227,8 @@ const VisualBuilderWorkspace: React.FC = () => {
             {selectedNode && <PropertiesPanel node={selectedNode} onUpdate={updateNode} />}
             {analysisResult && (
                 <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 flex-grow">
-                    <h3 className="text-lg font-bold text-cyan-300 mb-2">Topology Analysis: <span className="text-white">{analysisResult.topology}</span></h3>
-                    <p className="text-sm text-gray-300 whitespace-pre-wrap">{analysisResult.description}</p>
+                    <h3 className="text-lg font-bold text-cyan-300 mb-2">Topology Analysis: <strong className="text-white">{analysisResult.topology}</strong></h3>
+                    <FormattedDescription text={analysisResult.description} />
                 </div>
             )}
         </div>
@@ -210,7 +247,12 @@ const VisualBuilderWorkspace: React.FC = () => {
       </div>
        {simulationParams && (
         <div className="mt-4">
-            <ReportDashboard simulationData={simulationParams} />
+            <ReportDashboard
+              simulationData={simulationParams}
+              nodes={nodes}
+              weakNodes={weakNodes}
+              onReconstruct={handleReconstruct}
+            />
         </div>
         )}
     </div>

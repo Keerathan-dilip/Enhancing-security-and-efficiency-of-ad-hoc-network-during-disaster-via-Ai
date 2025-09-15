@@ -16,14 +16,14 @@ class GeminiService {
     }
     
     const prompt = `
-      As a network engineering expert, briefly explain the following network topology in a paragraph for a simulation tool: "${topology}".
+      As a network engineering expert, explain the following network topology in a structured way for a simulation tool: "${topology}".
       
-      Your explanation should cover:
-      1. A concise definition of the topology.
-      2. Its primary advantages and disadvantages in the context of ad hoc networks.
-      3. Common routing protocols associated with it (like AODV, DSR, OLSR if applicable).
+      Your explanation should have three parts:
+      1.  **Definition**: A concise definition of the topology.
+      2.  **Protocols**: List the common routing protocols associated with it (like AODV, DSR, OLSR). It is very important that you wrap each protocol name in double asterisks, for example: **AODV**.
+      3.  **Mechanism**: Explain how the topology and its protocols work in an ad hoc network. Describe how data is routed or how the network structure is maintained.
       
-      Keep the tone professional and the explanation clear and easy to understand. Do not use markdown formatting.
+      Keep the tone professional and the explanation clear. Use section headers like "Definition:", "Protocols:", and "Mechanism:". Do not use markdown headings (like '#').
     `;
 
     try {
@@ -41,13 +41,21 @@ class GeminiService {
   private getMockDescription(topology: string): string {
     switch(topology.toLowerCase()) {
         case 'star topology':
-            return "A star topology is a network setup where every node connects to a central hub, like a switch or router. All traffic passes through this central device. Its main advantage is simplicity and robustness; if one node fails, others are unaffected. However, if the central hub fails, the entire network goes down. It's less common in true mobile ad hoc networks but is foundational for wireless infrastructure modes using an Access Point.";
+            return `Definition: A star topology is a network setup where every node connects to a central hub. All traffic passes through this central device.
+Protocols: This is a centralized topology, so it doesn't use ad hoc routing protocols like **AODV**. It relies on the central hub's logic, similar to infrastructure-based Wi-Fi.
+Mechanism: The central hub (e.g., an Access Point) manages all connections and routes data between nodes. If a node wants to communicate with another, it sends the data to the hub, which then forwards it to the destination node. This is efficient but creates a single point of failure.`;
         case 'ring topology':
-            return "In a ring topology, each node is connected to exactly two other nodes, forming a single continuous pathway for signals - a ring. Data travels from node to node, with each node handling every packet. While orderly and preventing collisions, a single node or cable failure can disrupt the entire network. Protocols like Token Ring were based on this, but it is not typically used for dynamic ad hoc networks due to its rigidity.";
+            return `Definition: In a ring topology, each node is connected to exactly two other nodes, forming a single continuous pathway for signals.
+Protocols: **Token Ring** is a classic protocol for this topology. It is not typically used for dynamic ad hoc networks.
+Mechanism: A special data packet called a "token" circulates around the ring. A node can only transmit data when it possesses the token. This prevents data collisions but can be inefficient as nodes must wait for the token. A single node failure can break the ring.`;
         case 'mesh topology':
-            return "A mesh topology is a highly reliable setup where nodes are interconnected with many redundant paths. In a full mesh, every node is connected to every other node. This provides excellent fault tolerance and robustness, as data can be rerouted if a path or node fails. It is the basis for many mobile ad hoc network (MANET) routing protocols like AODV and DSR, which dynamically discover routes through the mesh of nodes.";
+            return `Definition: A mesh topology is a highly reliable setup where nodes are interconnected with many redundant paths.
+Protocols: Common ad hoc protocols include **AODV** (Ad hoc On-Demand Distance Vector), **DSR** (Dynamic Source Routing), and **OLSR** (Optimized Link State Routing).
+Mechanism: Nodes act as routers for each other to forward data. When a node wants to send a packet, protocols like **AODV** discover a route by broadcasting a request. Intermediate nodes relay this request until it reaches the destination, establishing a path. This allows the network to be self-healing and adapt to node failures or movement.`;
         default:
-            return "This is a custom or hybrid network configuration. It combines elements of different topologies to suit specific needs. In ad hoc networks, nodes often form dynamic clusters, which is a type of hybrid topology. This provides a balance of efficiency and scalability, where local traffic is handled within a cluster and a cluster-head communicates with other clusters. Routing protocols like ZRP (Zone Routing Protocol) are designed for such structures.";
+            return `Definition: This is a custom or hybrid network configuration, often forming dynamic clusters. It combines elements of different topologies to suit specific needs.
+Protocols: Hierarchical or hybrid protocols like **ZRP** (Zone Routing Protocol) and **LEACH** (Low-Energy Adaptive Clustering Hierarchy) are common.
+Mechanism: Nodes are grouped into clusters, each with a cluster-head. Communication within a cluster is direct, while communication between clusters goes through the cluster-heads. This reduces routing overhead and saves energy, providing a balance of efficiency and scalability.`;
     }
   }
 }

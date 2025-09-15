@@ -4,13 +4,16 @@ import {
     RadialBarChart, RadialBar, PolarAngleAxis,
     AreaChart, Area
 } from 'recharts';
-import { SimulationParameters } from '../types';
+import { Node, SimulationParameters } from '../types';
 
 interface ReportDashboardProps {
   simulationData: {
     'AI-Based': SimulationParameters;
     'Traditional': SimulationParameters;
   };
+  nodes: Node[];
+  weakNodes: Node[];
+  onReconstruct: () => void;
 }
 
 type ChartType = 'gauge' | 'area' | 'stat' | 'progress' | 'bar';
@@ -141,7 +144,7 @@ const UnifiedChart: React.FC<{ data: any; type: ChartType }> = ({ data, type }) 
     }
 };
 
-const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData }) => {
+const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData, nodes, weakNodes, onReconstruct }) => {
   const reportRef = useRef(null);
   
   const processedData = PARAMETER_CONFIG.map(config => {
@@ -197,7 +200,10 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData }) => 
   return (
     <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-6 mt-4 animate-fadeIn">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold text-cyan-300">Detailed Performance Report</h2>
+        <div>
+          <h2 className="text-2xl font-semibold text-cyan-300">Detailed Performance Report</h2>
+          <p className="text-sm text-gray-400 mt-1">Analysis based on the current network topology and node health.</p>
+        </div>
         <button 
           onClick={handleDownload}
           className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-all duration-300 flex items-center space-x-2">
@@ -218,6 +224,65 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData }) => 
                     </div>
                 </div>
             ))}
+        </div>
+      </div>
+
+       <div className="mt-8">
+        <h2 className="text-2xl font-semibold text-cyan-300 mb-4">Node Health & Details</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-gray-800/50 p-4 rounded-lg border border-cyan-500/10 shadow-lg">
+                <h3 className="text-lg font-semibold text-cyan-200 mb-3">Node Energy Status</h3>
+                <div className="max-h-80 overflow-y-auto">
+                    <table className="w-full text-sm text-left text-gray-300">
+                        <thead className="text-xs text-cyan-300 uppercase bg-gray-700/50 sticky top-0">
+                            <tr>
+                                <th scope="col" className="px-4 py-2">Node ID</th>
+                                <th scope="col" className="px-4 py-2">Efficiency (%)</th>
+                                <th scope="col" className="px-4 py-2">Spent (J)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {nodes.map((node, index) => (
+                                <tr key={node.id} className="border-b border-gray-700 hover:bg-gray-700/30">
+                                    <td className="px-4 py-2 font-medium">Node {index + 1}</td>
+                                    <td className={`px-4 py-2 ${node.energyEfficiency < 85 ? 'text-red-400 font-bold' : 'text-green-400'}`}>{node.energyEfficiency}</td>
+                                    <td className="px-4 py-2">{node.energySpent}</td>
+                                </tr>
+                            ))}
+                            {nodes.length === 0 && (
+                                <tr>
+                                    <td colSpan={3} className="text-center py-4 text-gray-500">No nodes in the network.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="bg-gray-800/50 p-4 rounded-lg border border-cyan-500/10 shadow-lg flex flex-col">
+                <h3 className="text-lg font-semibold text-cyan-200 mb-3">Network Self-Healing</h3>
+                {weakNodes.length > 0 ? (
+                    <div className="flex-grow flex flex-col justify-between">
+                        <div>
+                            <p className="text-red-400 font-semibold mb-2">{weakNodes.length} weaker node(s) detected (efficiency &lt; 85%).</p>
+                            <p className="text-sm text-gray-400 mb-4">Removing these nodes can improve overall network lifetime and performance. The network will attempt to reconstruct connections.</p>
+                            <ul className="text-xs list-disc list-inside text-gray-400">
+                                {weakNodes.map((node) => <li key={node.id}>Node {nodes.findIndex(n => n.id === node.id) + 1} ({node.id.substring(0,10)}...)</li>)}
+                            </ul>
+                        </div>
+                        <button
+                            onClick={onReconstruct}
+                            className="mt-4 w-full px-5 py-3 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 transition-all duration-300 flex items-center justify-center space-x-2"
+                        >
+                            <span>Remove Weaker Nodes & Reconstruct</span>
+                        </button>
+                    </div>
+                ) : (
+                      <div className="flex-grow flex items-center justify-center">
+                        <p className="text-green-400 text-center">Network is healthy. No weak nodes detected.</p>
+                      </div>
+                )}
+            </div>
         </div>
       </div>
     </div>

@@ -164,7 +164,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
           );
         })}
       </svg>
-      {nodes.map(node => (
+      {nodes.map((node, index) => (
         <div
           key={node.id}
           className={`absolute w-10 h-10 cursor-grab active:cursor-grabbing transition-all duration-100 ${
@@ -174,6 +174,9 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
           onMouseDown={e => handleMouseDown(e, node.id)}
         >
           <NodeIcon type={node.type} />
+          <span className="absolute text-white text-xs font-bold pointer-events-none" style={{ textShadow: '0 0 3px black' }}>
+            {index + 1}
+          </span>
         </div>
       ))}
     </div>
