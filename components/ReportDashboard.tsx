@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    RadialBarChart, RadialBar, PolarAngleAxis,
-    AreaChart, Area
+    PieChart, Pie, Cell,
+    LineChart, Line
 } from 'recharts';
 import { Node, SimulationParameters, NetworkComponentType } from '../types';
 import IPConfigurationPanel from './IPConfigurationPanel';
@@ -18,7 +18,7 @@ interface ReportDashboardProps {
   onUpdateNodeIp: (nodeId: string, ipAddress: string) => void;
 }
 
-type ChartType = 'gauge' | 'area' | 'stat' | 'progress' | 'bar';
+type ChartType = 'pie' | 'line' | 'stat' | 'progress' | 'bar';
 
 const PARAMETER_CONFIG: {
     key: keyof SimulationParameters;
@@ -27,13 +27,13 @@ const PARAMETER_CONFIG: {
     displayName?: string;
     chartType: ChartType;
 }[] = [
-  { key: 'Packet Delivery Ratio', higherIsBetter: true, unit: '%', chartType: 'gauge' },
-  { key: 'End-to-end Delay (ms)', higherIsBetter: false, displayName: 'Responsiveness', unit: '(Higher is better)', chartType: 'area' },
-  { key: 'Energy Consumption (J)', higherIsBetter: false, displayName: 'Energy Conservation', unit: '(Higher is better)', chartType: 'area' },
+  { key: 'Packet Delivery Ratio', higherIsBetter: true, unit: '%', chartType: 'pie' },
+  { key: 'End-to-end Delay (ms)', higherIsBetter: false, displayName: 'Responsiveness', unit: '(Higher is better)', chartType: 'line' },
+  { key: 'Energy Consumption (J)', higherIsBetter: false, displayName: 'Energy Conservation', unit: '(Higher is better)', chartType: 'line' },
   { key: 'Network Lifetime (days)', higherIsBetter: true, unit: 'days', chartType: 'stat' },
   { key: 'Scalability Index', higherIsBetter: true, unit: '', chartType: 'progress' },
   { key: 'Computational Efficiency (ops/J)', higherIsBetter: true, unit: 'ops/J', chartType: 'bar' },
-  { key: 'Energy Efficiency', higherIsBetter: true, unit: '%', chartType: 'gauge' },
+  { key: 'Energy Efficiency', higherIsBetter: true, unit: '%', chartType: 'pie' },
   { key: 'Robustness Index', higherIsBetter: true, unit: '', chartType: 'progress' },
   { key: 'Adaptability Rate', higherIsBetter: true, unit: '', chartType: 'progress' },
 ];
@@ -42,43 +42,74 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
         <div className="p-2 bg-gray-800 border border-cyan-500 rounded-md shadow-lg">
-          {payload.map((pld: any, index: number) => (
-             <div key={index} style={{ color: pld.fill }}>{`${pld.name}: ${pld.value.toFixed(2)}`}</div>
-          ))}
+          {payload.map((pld: any, index: number) => {
+            const color = pld.stroke || pld.fill;
+            const name = pld.name || label;
+            return (
+             <div key={index} style={{ color }}>{`${name}: ${pld.value.toFixed(2)}`}</div>
+            )
+          })}
         </div>
       );
     }
     return null;
 };
 
-const GaugeChart: React.FC<{ data: any }> = ({ data }) => {
+const COLORS_AI = ['#22d3ee', '#374151'];
+const COLORS_TRADITIONAL = ['#f97316', '#374151'];
+
+const PieChartComponent: React.FC<{ data: any }> = ({ data }) => {
     const aiValue = data['AI-Based'] * 100;
     const traditionalValue = data['Traditional'] * 100;
+
+    const aiPieData = [ { name: 'Value', value: aiValue }, { name: 'Remainder', value: 100 - aiValue }];
+    const traditionalPieData = [ { name: 'Value', value: traditionalValue }, { name: 'Remainder', value: 100 - traditionalValue }];
+
     return (
-        <ResponsiveContainer width="100%" height={250}>
-            <RadialBarChart innerRadius="40%" outerRadius="100%" data={[{name: 'Traditional', value: traditionalValue, fill: '#f97316'}, {name: 'AI-Based', value: aiValue, fill: '#22d3ee'}]} startAngle={180} endAngle={0} barSize={20}>
-                <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                <RadialBar background dataKey="value" cornerRadius={10} />
-                <Legend iconSize={10} wrapperStyle={{fontSize: "12px"}}/>
-                <Tooltip content={<CustomTooltip />} />
-            </RadialBarChart>
-        </ResponsiveContainer>
+        <div className="flex justify-around items-center h-full">
+            <div className="w-1/2 flex flex-col items-center">
+                <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                        <Pie data={aiPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={45}>
+                            {aiPieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS_AI[index % COLORS_AI.length]} />)}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                </ResponsiveContainer>
+                <p className="text-center text-sm font-semibold text-cyan-300">AI: {aiValue.toFixed(1)}%</p>
+            </div>
+            <div className="w-1/2 flex flex-col items-center">
+                <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                        <Pie data={traditionalPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={45}>
+                            {traditionalPieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS_TRADITIONAL[index % COLORS_TRADITIONAL.length]} />)}
+                        </Pie>
+                         <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                </ResponsiveContainer>
+                 <p className="text-center text-sm font-semibold text-orange-400">Traditional: {traditionalValue.toFixed(1)}%</p>
+            </div>
+        </div>
     );
 };
 
-const AreaComparisonChart: React.FC<{ data: any }> = ({ data }) => (
-    <ResponsiveContainer width="100%" height={250}>
-        <AreaChart data={[data]} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="name" tick={false} />
-            <YAxis stroke="#9ca3af" domain={['dataMin - 10', 'dataMax + 10']} hide/>
-            <Tooltip content={<CustomTooltip />} cursor={{fill: '#37415180'}}/>
-            <Legend />
-            <Area type="monotone" dataKey="AI-Based" stroke="#22d3ee" fill="#22d3ee" fillOpacity={0.3} />
-            <Area type="monotone" dataKey="Traditional" stroke="#f97316" fill="#f97316" fillOpacity={0.3} />
-        </AreaChart>
-    </ResponsiveContainer>
-);
+const LineComparisonChart: React.FC<{ data: any }> = ({ data }) => {
+    const chartData = [
+        { name: 'Traditional', value: data['Traditional'] },
+        { name: 'AI-Based', value: data['AI-Based'] }
+    ];
+    return (
+        <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="name" stroke="#9ca3af" />
+                <YAxis stroke="#9ca3af" />
+                <Tooltip content={<CustomTooltip />} cursor={{fill: '#37415180'}} />
+                <Line type="monotone" dataKey="value" stroke="#22d3ee" strokeWidth={3} name="Performance Score" dot={{ r: 6, fill: '#facc15' }} activeDot={{ r: 8 }} />
+            </LineChart>
+        </ResponsiveContainer>
+    );
+};
 
 const KeyStatDisplay: React.FC<{ data: any }> = ({ data }) => (
     <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -137,8 +168,8 @@ const BarComparisonChart: React.FC<{ data: any }> = ({ data }) => (
 
 const UnifiedChart: React.FC<{ data: any; type: ChartType }> = ({ data, type }) => {
     switch (type) {
-        case 'gauge': return <GaugeChart data={data} />;
-        case 'area': return <AreaComparisonChart data={data} />;
+        case 'pie': return <PieChartComponent data={data} />;
+        case 'line': return <LineComparisonChart data={data} />;
         case 'stat': return <KeyStatDisplay data={data} />;
         case 'progress': return <IndexProgress data={data} />;
         case 'bar': return <BarComparisonChart data={data} />;
@@ -159,7 +190,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData, nodes
       displayAiValue = aiValue;
       displayTraditionalValue = traditionalValue;
     } else {
-      displayAiValue = aiValue !== 0 ? 100 / aiValue : Infinity; // Scale for better visualization
+      // Create an inverted "score" where higher is better for intuitive visualization
+      displayAiValue = aiValue !== 0 ? 100 / aiValue : Infinity;
       displayTraditionalValue = traditionalValue !== 0 ? 100 / traditionalValue : Infinity;
     }
     

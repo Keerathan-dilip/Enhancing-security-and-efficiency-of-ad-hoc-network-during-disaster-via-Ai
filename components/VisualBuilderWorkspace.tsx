@@ -13,6 +13,7 @@ import AIInsightsPanel from './AIInsightsPanel';
 const WEAK_NODE_EFFICIENCY_THRESHOLD = 85;
 const PACKET_ANIMATION_DURATION_AI = 4000; // ms
 const PACKET_ANIMATION_DURATION_TRADITIONAL = 5500; // ms
+const PACKET_SIMULATION_DURATION = 20000; // 20s
 
 interface VisualBuilderWorkspaceProps {
     nodes: Node[];
@@ -50,6 +51,8 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [isConnectionMode, setIsConnectionMode] = useState(false);
+  const [isPacketSimulationMode, setIsPacketSimulationMode] = useState(false);
+  const [packetSimSourceNode, setPacketSimSourceNode] = useState<string | null>(null);
   const [animatedPackets, setAnimatedPackets] = useState<AnimatedPacket[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -62,6 +65,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     setSelectedConnectionId(null);
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
   }, []);
 
@@ -95,41 +99,95 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     };
   }, []);
 
-  const startPacketAnimation = (path: string[]) => {
+  const animationLoop = useCallback(() => {
+    setAnimatedPackets(prevPackets => {
+      const now = performance.now();
+      const updatedPackets = prevPackets.map(p => {
+        const elapsedTime = now - p.startTime;
+        const progress = Math.min(elapsedTime / p.duration, 1);
+        return { ...p, progress };
+      }).filter(p => p.progress < 1); // Remove completed packets
+
+      if (updatedPackets.length > 0) {
+        animationFrameRef.current = requestAnimationFrame(animationLoop);
+      } else {
+        animationFrameRef.current = null;
+      }
+      return updatedPackets;
+    });
+  }, []);
+
+  const ensureAnimationLoop = useCallback(() => {
+    if (!animationFrameRef.current) {
+      animationFrameRef.current = requestAnimationFrame(animationLoop);
+    }
+  }, [animationLoop]);
+
+  const startAnalysisPacketAnimation = (path: string[]) => {
     const startTime = performance.now();
     const newPackets: AnimatedPacket[] = [
       { id: 'packet-ai', path, progress: 0, color: '#22d3ee', startTime, duration: PACKET_ANIMATION_DURATION_AI },
       { id: 'packet-trad', path, progress: 0, color: '#f97316', startTime, duration: PACKET_ANIMATION_DURATION_TRADITIONAL },
     ];
-
-    const animate = (time: number) => {
-      let allDone = true;
-      setAnimatedPackets(prevPackets => {
-        return prevPackets.map(p => {
-          const elapsedTime = time - p.startTime;
-          const progress = Math.min(elapsedTime / p.duration, 1);
-          if (progress < 1) allDone = false;
-          return { ...p, progress };
-        });
-      });
-
-      if (!allDone) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-      } else {
-         setTimeout(() => setAnimatedPackets([]), 1000); // clear packets after a delay
-      }
-    };
-
-    setAnimatedPackets(newPackets);
-    animationFrameRef.current = requestAnimationFrame(animate);
+    setAnimatedPackets(prev => [...prev, ...newPackets]);
+    ensureAnimationLoop();
   };
 
 
   const toggleConnectionMode = () => {
-    setIsConnectionMode(prev => !prev);
-    setSelectedNodeId(null); // Deselect nodes when entering/exiting mode
-    setSelectedConnectionId(null);
+    setIsConnectionMode(prev => {
+        const isEntering = !prev;
+        if (isEntering) {
+            setIsPacketSimulationMode(false);
+            setPacketSimSourceNode(null);
+        }
+        setSelectedNodeId(null);
+        setSelectedConnectionId(null);
+        return isEntering;
+    });
   };
+
+  const togglePacketSimulationMode = () => {
+    setIsPacketSimulationMode(prev => {
+        const isEntering = !prev;
+        if (isEntering) {
+            setIsConnectionMode(false);
+            setSelectedNodeId(null);
+            setSelectedConnectionId(null);
+        }
+        setPacketSimSourceNode(null);
+        return isEntering;
+    });
+  };
+
+  const handleNodeClickForSimulation = (nodeId: string) => {
+    if (!packetSimSourceNode) {
+        setPacketSimSourceNode(nodeId);
+        return;
+    }
+
+    if (packetSimSourceNode === nodeId) return;
+
+    const path = pathfindingService.findShortestPath(packetSimSourceNode, nodeId, nodes, connections);
+    if (path) {
+        const newPacket: AnimatedPacket = {
+            id: `sim-packet-${Date.now()}`,
+            path,
+            progress: 0,
+            color: '#facc15', // Yellow
+            startTime: performance.now(),
+            duration: PACKET_SIMULATION_DURATION,
+        };
+        setAnimatedPackets(prev => [...prev, newPacket]);
+        ensureAnimationLoop();
+    } else {
+        alert("No path found between the selected nodes.");
+    }
+    
+    setPacketSimSourceNode(null);
+    setIsPacketSimulationMode(false);
+  };
+
 
   const addNode = (type: NetworkComponentType, x: number, y: number) => {
     const baseNode = {
@@ -352,6 +410,8 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     setIsGeneratingInsights(true);
     clearAnalysis();
     setIsConnectionMode(false);
+    setIsPacketSimulationMode(false);
+    setPacketSimSourceNode(null);
     try {
       const topology = networkAnalysisService.identifyTopology(nodes, connections);
       
@@ -374,7 +434,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       if (farthestNodes) {
         const path = pathfindingService.findShortestPath(farthestNodes[0], farthestNodes[1], nodes, connections);
         if (path) {
-          startPacketAnimation(path);
+          startAnalysisPacketAnimation(path);
         }
       }
 
@@ -454,10 +514,12 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                 onGenerateNetwork={generateNetwork}
                 isConnectionMode={isConnectionMode}
                 onToggleConnectionMode={toggleConnectionMode}
+                isPacketSimulationMode={isPacketSimulationMode}
+                onTogglePacketSimulationMode={togglePacketSimulationMode}
                 onAutoConnect={handleAutoConnect}
             />
-            {selectedNode && !isConnectionMode && <PropertiesPanel node={selectedNode} onUpdate={updateNode} />}
-            {selectedConnection && !isConnectionMode && <ConnectionPanel connection={selectedConnection} nodes={nodes} onDelete={deleteSelectedConnection} />}
+            {selectedNode && !isConnectionMode && !isPacketSimulationMode && <PropertiesPanel node={selectedNode} onUpdate={updateNode} />}
+            {selectedConnection && !isConnectionMode && !isPacketSimulationMode && <ConnectionPanel connection={selectedConnection} nodes={nodes} onDelete={deleteSelectedConnection} />}
             {analysisResult && (
                 <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4">
                     <h3 className="text-lg font-bold text-cyan-300 mb-2">Topology Analysis: <strong className="text-white">{analysisResult.topology}</strong></h3>
@@ -481,6 +543,9 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                 setSelectedConnectionId={setSelectedConnectionId}
                 onAddComponent={addNode}
                 isConnectionMode={isConnectionMode}
+                isPacketSimulationMode={isPacketSimulationMode}
+                onNodeClickForSimulation={handleNodeClickForSimulation}
+                packetSimSourceNode={packetSimSourceNode}
                 animatedPackets={animatedPackets}
             />
         </div>

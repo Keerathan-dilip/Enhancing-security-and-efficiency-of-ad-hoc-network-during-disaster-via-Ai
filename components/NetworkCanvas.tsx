@@ -13,6 +13,9 @@ interface NetworkCanvasProps {
   setSelectedConnectionId: (id: string | null) => void;
   onAddComponent: (type: NetworkComponentType, x: number, y: number) => void;
   isConnectionMode: boolean;
+  isPacketSimulationMode: boolean;
+  onNodeClickForSimulation: (id: string) => void;
+  packetSimSourceNode: string | null;
   animatedPackets: AnimatedPacket[];
 }
 
@@ -27,6 +30,9 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   setSelectedConnectionId,
   onAddComponent,
   isConnectionMode,
+  isPacketSimulationMode,
+  onNodeClickForSimulation,
+  packetSimSourceNode,
   animatedPackets,
 }, ref) => {
   const [draggingNode, setDraggingNode] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
@@ -41,6 +47,10 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
 
   const handleMouseDown = (e: MouseEvent<HTMLDivElement>, id: string) => {
     e.stopPropagation();
+    if (isPacketSimulationMode) {
+      onNodeClickForSimulation(id);
+      return;
+    }
     if (isConnectionMode) {
         if (isConnecting) {
             if(isConnecting !== id) {
@@ -104,7 +114,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   };
   
   const handleCanvasClick = () => {
-    if (!isConnectionMode) {
+    if (!isConnectionMode && !isPacketSimulationMode) {
         setSelectedNodeId(null);
         setSelectedConnectionId(null);
     }
@@ -170,6 +180,12 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
             <div className='absolute top-2 left-3 text-sm text-yellow-300 bg-gray-900/70 backdrop-blur-sm px-3 py-1 rounded-lg animate-pulse z-10'
                  aria-live="polite">
                 Connection Mode Active: Click two nodes to connect them.
+            </div>
+        )}
+        {isPacketSimulationMode && (
+            <div className='absolute top-2 left-3 text-sm text-yellow-300 bg-gray-900/70 backdrop-blur-sm px-3 py-1 rounded-lg z-10'
+                    aria-live="polite">
+                {packetSimSourceNode ? 'Select a destination node.' : 'Select a source node for packet simulation.'}
             </div>
         )}
       <svg className="absolute top-0 left-0 w-full h-full">
@@ -241,23 +257,32 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
           );
         })}
       </svg>
-      {nodes.map((node, index) => (
-        <div
-          key={node.id}
-          className={`absolute w-10 h-10 transition-all duration-100 ${
-            isConnectionMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'
-          } ${
-            selectedNodeId === node.id && !isConnectionMode ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-gray-800' : ''
-          } ${isConnecting === node.id ? 'animate-pulse ring-2 ring-green-400' : ''} rounded-full flex items-center justify-center`}
-          style={{ left: node.x, top: node.y, transform: 'translate(-50%, -50%)' }}
-          onMouseDown={e => handleMouseDown(e, node.id)}
-        >
-          <NodeIcon type={node.type} />
-          <span className="absolute text-white text-xs font-bold pointer-events-none" style={{ textShadow: '0 0 3px black' }}>
-            {index + 1}
-          </span>
-        </div>
-      ))}
+      {nodes.map((node, index) => {
+        const isSelected = selectedNodeId === node.id && !isConnectionMode && !isPacketSimulationMode;
+        const isConnSource = isConnecting === node.id;
+        const isSimSource = packetSimSourceNode === node.id;
+        return (
+            <div
+            key={node.id}
+            className={`absolute w-10 h-10 transition-all duration-100 ${
+                isConnectionMode || isPacketSimulationMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+            } ${
+                isSelected ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-gray-800' : ''
+            } ${
+                isConnSource ? 'animate-pulse ring-2 ring-green-400' : ''
+            } ${
+                isSimSource ? 'animate-pulse ring-2 ring-yellow-400' : ''
+            } rounded-full flex items-center justify-center`}
+            style={{ left: node.x, top: node.y, transform: 'translate(-50%, -50%)' }}
+            onMouseDown={e => handleMouseDown(e, node.id)}
+            >
+            <NodeIcon type={node.type} />
+            <span className="absolute text-white text-xs font-bold pointer-events-none" style={{ textShadow: '0 0 3px black' }}>
+                {index + 1}
+            </span>
+            </div>
+        );
+      })}
     </div>
   );
 });
