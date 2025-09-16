@@ -36,7 +36,13 @@ const VisualBuilderWorkspace: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<{ topology: string; description: string } | null>(null);
   const [simulationParams, setSimulationParams] = useState<any | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isConnectionMode, setIsConnectionMode] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  const toggleConnectionMode = () => {
+    setIsConnectionMode(prev => !prev);
+    setSelectedNodeId(null); // Deselect nodes when entering/exiting mode
+  };
 
   const addNode = (type: NetworkComponentType, x: number, y: number) => {
     const newNode: Node = {
@@ -171,16 +177,22 @@ const VisualBuilderWorkspace: React.FC = () => {
     setSelectedNodeId(null);
     setAnalysisResult(null);
     setSimulationParams(null);
+    setIsConnectionMode(false);
   }, []);
 
   const updateNode = useCallback((updatedNode: Node) => {
     setNodes((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
   }, []);
 
+  const updateNodeIp = useCallback((nodeId: string, ipAddress: string) => {
+    setNodes(prev => prev.map(n => (n.id === nodeId ? { ...n, ipAddress } : n)));
+  }, []);
+
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
     setAnalysisResult(null);
     setSimulationParams(null);
+    setIsConnectionMode(false);
     try {
       const topology = networkAnalysisService.identifyTopology(nodes, connections);
       const description = await geminiService.getTopologyDescription(topology);
@@ -196,20 +208,39 @@ const VisualBuilderWorkspace: React.FC = () => {
     }
   };
 
-  const handleReconstruct = useCallback(() => {
+  const handleReconstruct = useCallback(async () => {
     const weakNodeIds = nodes
       .filter(n => n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD)
       .map(n => n.id);
 
     if (weakNodeIds.length === 0) return;
 
-    setNodes(prevNodes => prevNodes.filter(n => !weakNodeIds.includes(n.id)));
-    setConnections(prevConnections => 
-      prevConnections.filter(c => !weakNodeIds.includes(c.from) && !weakNodeIds.includes(c.to))
-    );
+    const newNodes = nodes.filter(n => !weakNodeIds.includes(n.id));
+    const newConnections = connections.filter(c => !weakNodeIds.includes(c.from) && !weakNodeIds.includes(c.to));
+    
+    setNodes(newNodes);
+    setConnections(newConnections);
     setSelectedNodeId(null);
-    alert(`Removed ${weakNodeIds.length} weaker node(s) and reconstructed the network.`);
-  }, [nodes]);
+    
+    alert(`Removed ${weakNodeIds.length} weaker node(s). The network report will now be updated.`);
+    
+    if (newNodes.length >= 2) {
+      try {
+        const topology = networkAnalysisService.identifyTopology(newNodes, newConnections);
+        const description = await geminiService.getTopologyDescription(topology);
+        setAnalysisResult({ topology, description });
+
+        const params = networkAnalysisService.simulatePerformance(topology, newNodes, newConnections);
+        setSimulationParams(params);
+      } catch (error) {
+        console.error("Re-analysis failed after reconstruction:", error);
+        setAnalysisResult({ topology: 'Error', description: 'Failed to re-analyze network.' });
+      }
+    } else {
+        setAnalysisResult(null);
+        setSimulationParams(null);
+    }
+  }, [nodes, connections]);
   
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
   const weakNodes = nodes.filter(n => n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD);
@@ -223,8 +254,10 @@ const VisualBuilderWorkspace: React.FC = () => {
                 isAnalyzing={isAnalyzing} 
                 nodeCount={nodes.length}
                 onGenerateNetwork={generateNetwork}
+                isConnectionMode={isConnectionMode}
+                onToggleConnectionMode={toggleConnectionMode}
             />
-            {selectedNode && <PropertiesPanel node={selectedNode} onUpdate={updateNode} />}
+            {selectedNode && !isConnectionMode && <PropertiesPanel node={selectedNode} onUpdate={updateNode} />}
             {analysisResult && (
                 <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 flex-grow">
                     <h3 className="text-lg font-bold text-cyan-300 mb-2">Topology Analysis: <strong className="text-white">{analysisResult.topology}</strong></h3>
@@ -242,6 +275,7 @@ const VisualBuilderWorkspace: React.FC = () => {
                 selectedNodeId={selectedNodeId}
                 setSelectedNodeId={setSelectedNodeId}
                 onAddComponent={addNode}
+                isConnectionMode={isConnectionMode}
             />
         </div>
       </div>
@@ -252,6 +286,7 @@ const VisualBuilderWorkspace: React.FC = () => {
               nodes={nodes}
               weakNodes={weakNodes}
               onReconstruct={handleReconstruct}
+              onUpdateNodeIp={updateNodeIp}
             />
         </div>
         )}

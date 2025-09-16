@@ -5,6 +5,7 @@ import {
     AreaChart, Area
 } from 'recharts';
 import { Node, SimulationParameters } from '../types';
+import IPConfigurationPanel from './IPConfigurationPanel';
 
 interface ReportDashboardProps {
   simulationData: {
@@ -14,6 +15,7 @@ interface ReportDashboardProps {
   nodes: Node[];
   weakNodes: Node[];
   onReconstruct: () => void;
+  onUpdateNodeIp: (nodeId: string, ipAddress: string) => void;
 }
 
 type ChartType = 'gauge' | 'area' | 'stat' | 'progress' | 'bar';
@@ -144,7 +146,7 @@ const UnifiedChart: React.FC<{ data: any; type: ChartType }> = ({ data, type }) 
     }
 };
 
-const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData, nodes, weakNodes, onReconstruct }) => {
+const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData, nodes, weakNodes, onReconstruct, onUpdateNodeIp }) => {
   const reportRef = useRef(null);
   
   const processedData = PARAMETER_CONFIG.map(config => {
@@ -284,6 +286,11 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData, nodes
                 )}
             </div>
         </div>
+      </div>
+      
+      <div className="mt-8">
+        <h2 className="text-2xl font-semibold text-cyan-300 mb-4">Network Configuration</h2>
+        <IPConfigurationPanel nodes={nodes} onUpdateNodeIp={onUpdateNodeIp} />
       </div>
     </div>
   );

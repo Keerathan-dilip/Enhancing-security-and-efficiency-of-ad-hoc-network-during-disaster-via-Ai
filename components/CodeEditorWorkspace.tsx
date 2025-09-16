@@ -1,12 +1,20 @@
 
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { MOCK_CODE_CPP, SIMULATION_RESULTS } from '../constants';
+import { MOCK_CODE_CPP, MOCK_CODE_TCL, MOCK_CODE_AWK, SIMULATION_RESULTS } from '../constants';
 import { SimulationParameters } from '../types';
+
+type EditorType = 'cpp' | 'tcl' | 'awk';
 
 const CodeEditorWorkspace: React.FC = () => {
   const [simulationData, setSimulationData] = useState<any[] | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [activeEditor, setActiveEditor] = useState<EditorType>('cpp');
+
+  // Code states to make them editable
+  const [cppCode, setCppCode] = useState(MOCK_CODE_CPP);
+  const [tclCode, setTclCode] = useState(MOCK_CODE_TCL);
+  const [awkCode, setAwkCode] = useState(MOCK_CODE_AWK);
 
   const runSimulation = () => {
     setIsRunning(true);
@@ -22,11 +30,29 @@ const CodeEditorWorkspace: React.FC = () => {
     }, 1500);
   };
 
+  const TabButton: React.FC<{ editorType: EditorType; label: string }> = ({ editorType, label }) => {
+    const isActive = activeEditor === editorType;
+    return (
+      <button
+        onClick={() => setActiveEditor(editorType)}
+        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 focus:outline-none ${
+          isActive
+            ? 'border-b-2 border-cyan-400 text-cyan-300'
+            : 'text-gray-400 hover:text-white'
+        }`}
+        aria-pressed={isActive}
+      >
+        {label}
+      </button>
+    );
+  };
+
+
   return (
     <div className="h-full flex flex-col lg:flex-row gap-6 animate-fadeIn">
       <div className="lg:w-1/2 flex flex-col bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4">
         <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-cyan-300">NS-3 C++ Simulator</h2>
+            <h2 className="text-xl font-semibold text-cyan-300">Simulator Suite</h2>
             <button
             onClick={runSimulation}
             disabled={isRunning}
@@ -43,8 +69,23 @@ const CodeEditorWorkspace: React.FC = () => {
             <span>{isRunning ? 'Simulating...' : 'Run Simulation'}</span>
             </button>
         </div>
-        <div className="flex-grow bg-gray-900 rounded-md p-4 overflow-auto font-mono text-sm h-96 lg:h-auto">
-            <pre><code className="language-cpp">{MOCK_CODE_CPP}</code></pre>
+        
+        <div className="border-b border-cyan-500/20 flex space-x-2" role="tablist" aria-label="Code Editors">
+            <TabButton editorType="cpp" label="NS-3 C++" />
+            <TabButton editorType="tcl" label="TCL Script" />
+            <TabButton editorType="awk" label="AWK Script" />
+        </div>
+
+        <div className="flex-grow bg-gray-900 rounded-b-md overflow-auto font-mono text-sm h-96 lg:h-auto mt-[-1px]" role="tabpanel">
+             {activeEditor === 'cpp' && (
+                <textarea value={cppCode} onChange={(e) => setCppCode(e.target.value)} className="w-full h-full bg-transparent text-white resize-none focus:outline-none p-4" aria-label="C++ Code Editor" />
+            )}
+            {activeEditor === 'tcl' && (
+                <textarea value={tclCode} onChange={(e) => setTclCode(e.target.value)} className="w-full h-full bg-transparent text-white resize-none focus:outline-none p-4" aria-label="TCL Script Editor" />
+            )}
+            {activeEditor === 'awk' && (
+                <textarea value={awkCode} onChange={(e) => setAwkCode(e.target.value)} className="w-full h-full bg-transparent text-white resize-none focus:outline-none p-4" aria-label="AWK Script Editor" />
+            )}
         </div>
       </div>
       <div className="lg:w-1/2 flex flex-col bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4">

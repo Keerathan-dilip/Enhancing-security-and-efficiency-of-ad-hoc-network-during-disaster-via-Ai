@@ -10,6 +10,7 @@ interface NetworkCanvasProps {
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
   onAddComponent: (type: NetworkComponentType, x: number, y: number) => void;
+  isConnectionMode: boolean;
 }
 
 const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
@@ -20,6 +21,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   selectedNodeId,
   setSelectedNodeId,
   onAddComponent,
+  isConnectionMode,
 }, ref) => {
   const [draggingNode, setDraggingNode] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
@@ -27,7 +29,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
 
   const handleMouseDown = (e: MouseEvent<HTMLDivElement>, id: string) => {
     e.stopPropagation();
-    if (e.shiftKey) {
+    if (isConnectionMode) {
         if (isConnecting) {
             if(isConnecting !== id) {
                 const exists = connections.some(c => (c.from === isConnecting && c.to === id) || (c.from === id && c.to === isConnecting));
@@ -39,6 +41,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
             setConnectingLine(null);
         } else {
             setIsConnecting(id);
+            setSelectedNodeId(null);
         }
     } else {
         setSelectedNodeId(id);
@@ -87,7 +90,9 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   };
   
   const handleCanvasClick = () => {
-    setSelectedNodeId(null);
+    if (!isConnectionMode) {
+        setSelectedNodeId(null);
+    }
     setIsConnecting(null);
     setConnectingLine(null);
   }
@@ -125,9 +130,12 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-        <div className='absolute top-2 left-3 text-xs text-gray-400'>
-           Hold <kbd className='px-2 py-1.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg'>Shift</kbd> and click two nodes to create a connection.
-        </div>
+        {isConnectionMode && (
+            <div className='absolute top-2 left-3 text-sm text-yellow-300 bg-gray-900/70 backdrop-blur-sm px-3 py-1 rounded-lg animate-pulse z-10'
+                 aria-live="polite">
+                Connection Mode Active: Click two nodes to connect them.
+            </div>
+        )}
       <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
         {/* Render connection preview line */}
         {isConnecting && connectingLine && (() => {
@@ -167,8 +175,10 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
       {nodes.map((node, index) => (
         <div
           key={node.id}
-          className={`absolute w-10 h-10 cursor-grab active:cursor-grabbing transition-all duration-100 ${
-            selectedNodeId === node.id ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-gray-800' : ''
+          className={`absolute w-10 h-10 transition-all duration-100 ${
+            isConnectionMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'
+          } ${
+            selectedNodeId === node.id && !isConnectionMode ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-gray-800' : ''
           } ${isConnecting === node.id ? 'animate-pulse ring-2 ring-green-400' : ''} rounded-full flex items-center justify-center`}
           style={{ left: node.x, top: node.y, transform: 'translate(-50%, -50%)' }}
           onMouseDown={e => handleMouseDown(e, node.id)}

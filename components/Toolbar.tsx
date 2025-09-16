@@ -7,6 +7,8 @@ interface ToolbarProps {
   isAnalyzing: boolean;
   nodeCount: number;
   onGenerateNetwork: (count: number, topology: NetworkTopology) => void;
+  isConnectionMode: boolean;
+  onToggleConnectionMode: () => void;
 }
 
 const Tool: React.FC<{ type: NetworkComponentType, onDragStart: (e: React.DragEvent, type: NetworkComponentType) => void }> = ({ type, onDragStart }) => {
@@ -35,7 +37,7 @@ const TOPOLOGY_INFO: Record<NetworkTopology, string> = {
 };
 
 
-const Toolbar: React.FC<ToolbarProps> = ({ onAnalyze, isAnalyzing, nodeCount, onGenerateNetwork }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ onAnalyze, isAnalyzing, nodeCount, onGenerateNetwork, isConnectionMode, onToggleConnectionMode }) => {
   const [generateCount, setGenerateCount] = useState(50);
   const [topology, setTopology] = useState<NetworkTopology>('cluster');
     
@@ -103,6 +105,23 @@ const Toolbar: React.FC<ToolbarProps> = ({ onAnalyze, isAnalyzing, nodeCount, on
                 <span>Generate Network</span>
              </button>
         </div>
+      </div>
+
+       <div className="pt-4 border-t border-cyan-500/20">
+        <h3 className="text-lg font-bold text-cyan-300 mb-2">Actions</h3>
+        <button
+            onClick={onToggleConnectionMode}
+            className={`w-full px-5 py-2.5 font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 ${
+                isConnectionMode 
+                    ? 'bg-yellow-500 text-gray-900 hover:bg-yellow-600' 
+                    : 'bg-cyan-500 text-white hover:bg-cyan-600'
+            }`}
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8zM12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
+            </svg>
+            <span>{isConnectionMode ? 'Exit Connection Mode' : 'Connect Nodes'}</span>
+        </button>
       </div>
 
       <div className="pt-4 border-t border-cyan-500/20">
