@@ -9,6 +9,7 @@ interface ToolbarProps {
   onGenerateNetwork: (count: number, topology: NetworkTopology) => void;
   isConnectionMode: boolean;
   onToggleConnectionMode: () => void;
+  onAutoConnect: (k: number) => void;
 }
 
 const Tool: React.FC<{ type: NetworkComponentType, onDragStart: (e: React.DragEvent, type: NetworkComponentType) => void }> = ({ type, onDragStart }) => {
@@ -37,9 +38,10 @@ const TOPOLOGY_INFO: Record<NetworkTopology, string> = {
 };
 
 
-const Toolbar: React.FC<ToolbarProps> = ({ onAnalyze, isAnalyzing, nodeCount, onGenerateNetwork, isConnectionMode, onToggleConnectionMode }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ onAnalyze, isAnalyzing, nodeCount, onGenerateNetwork, isConnectionMode, onToggleConnectionMode, onAutoConnect }) => {
   const [generateCount, setGenerateCount] = useState(50);
   const [topology, setTopology] = useState<NetworkTopology>('cluster');
+  const [kNeighbors, setKNeighbors] = useState(2);
     
   const handleDragStart = (e: React.DragEvent, type: NetworkComponentType) => {
     e.dataTransfer.setData('application/reactflow', type);
@@ -122,6 +124,31 @@ const Toolbar: React.FC<ToolbarProps> = ({ onAnalyze, isAnalyzing, nodeCount, on
             </svg>
             <span>{isConnectionMode ? 'Exit Connection Mode' : 'Connect Nodes'}</span>
         </button>
+
+        <div className="mt-4">
+            <label htmlFor="k-neighbors" className="block text-sm font-medium text-gray-300 mb-1">Auto-Connect Nearest</label>
+            <div className="flex items-center space-x-2">
+                <input
+                    id="k-neighbors"
+                    type="number"
+                    value={kNeighbors}
+                    onChange={(e) => setKNeighbors(Math.max(1, parseInt(e.target.value, 10)) || 1)}
+                    min="1"
+                    max={nodeCount > 1 ? nodeCount - 1 : 1}
+                    className="w-1/3 bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                    aria-label="Number of nearest neighbors to connect"
+                    disabled={nodeCount < 2}
+                />
+                <button
+                    onClick={() => onAutoConnect(kNeighbors)}
+                    disabled={nodeCount < 2}
+                    className="flex-grow px-4 py-2 bg-purple-500 text-white font-bold rounded-lg hover:bg-purple-600 transition-all duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
+                >
+                    <span>Connect</span>
+                </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Replaces all existing connections.</p>
+        </div>
       </div>
 
       <div className="pt-4 border-t border-cyan-500/20">

@@ -188,6 +188,46 @@ const VisualBuilderWorkspace: React.FC = () => {
     setNodes(prev => prev.map(n => (n.id === nodeId ? { ...n, ipAddress } : n)));
   }, []);
 
+  const handleAutoConnect = useCallback((k: number) => {
+    if (nodes.length < 2 || k <= 0) return;
+
+    const newConnections: Connection[] = [];
+    const connectedPairs = new Set<string>();
+    const maxNeighbors = Math.min(k, nodes.length - 1);
+
+    for (let i = 0; i < nodes.length; i++) {
+        const sourceNode = nodes[i];
+        
+        const distances = nodes
+            .map(targetNode => {
+                if (sourceNode.id === targetNode.id) return null;
+                const dist = Math.sqrt(Math.pow(sourceNode.x - targetNode.x, 2) + Math.pow(sourceNode.y - targetNode.y, 2));
+                return { id: targetNode.id, dist };
+            })
+            .filter((item): item is { id: string; dist: number } => item !== null)
+            .sort((a, b) => a.dist - b.dist);
+
+        for (let j = 0; j < maxNeighbors; j++) {
+            const targetNodeId = distances[j].id;
+
+            const pair = [sourceNode.id, targetNodeId].sort();
+            const pairKey = `${pair[0]}-${pair[1]}`;
+
+            if (!connectedPairs.has(pairKey)) {
+                newConnections.push({
+                    id: `${pairKey}-${Date.now()}`,
+                    from: sourceNode.id,
+                    to: targetNodeId
+                });
+                connectedPairs.add(pairKey);
+            }
+        }
+    }
+    setConnections(newConnections);
+    setAnalysisResult(null);
+    setSimulationParams(null);
+  }, [nodes]);
+
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
     setAnalysisResult(null);
@@ -256,6 +296,7 @@ const VisualBuilderWorkspace: React.FC = () => {
                 onGenerateNetwork={generateNetwork}
                 isConnectionMode={isConnectionMode}
                 onToggleConnectionMode={toggleConnectionMode}
+                onAutoConnect={handleAutoConnect}
             />
             {selectedNode && !isConnectionMode && <PropertiesPanel node={selectedNode} onUpdate={updateNode} />}
             {analysisResult && (

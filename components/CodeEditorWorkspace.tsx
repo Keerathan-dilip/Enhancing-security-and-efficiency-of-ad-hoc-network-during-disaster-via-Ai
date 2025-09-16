@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { MOCK_CODE_CPP, MOCK_CODE_TCL, MOCK_CODE_AWK, SIMULATION_RESULTS } from '../constants';
@@ -50,7 +49,7 @@ const CodeEditorWorkspace: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col lg:flex-row gap-6 animate-fadeIn">
-      <div className="lg:w-1/2 flex flex-col bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4">
+      <div className="lg:w-2/3 flex flex-col bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4">
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-cyan-300">Simulator Suite</h2>
             <button
@@ -88,7 +87,7 @@ const CodeEditorWorkspace: React.FC = () => {
             )}
         </div>
       </div>
-      <div className="lg:w-1/2 flex flex-col bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4">
+      <div className="lg:w-1/3 flex flex-col bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4">
         <h2 className="text-xl font-semibold text-cyan-300 mb-4">Simulation Results</h2>
         <div className="flex-grow flex items-center justify-center">
           {isRunning && <div className="text-lg">Running simulation, please wait...</div>}
