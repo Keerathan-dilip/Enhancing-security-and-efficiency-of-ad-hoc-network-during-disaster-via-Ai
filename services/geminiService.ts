@@ -1,5 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 
+interface NetworkInsightsData {
+  nodeCount: number;
+  connectionCount: number;
+  topology: string;
+  avgDegree: number;
+  isolatedNodes: number;
+  bottlenecks: number;
+  avgEnergyEfficiency: number;
+  weakNodes: number;
+}
+
 class GeminiService {
   private ai: GoogleGenAI | null = null;
 
@@ -36,6 +47,63 @@ class GeminiService {
       console.error("Error fetching from Gemini API:", error);
       return "Could not retrieve description. The API may be unavailable or the key may be invalid.";
     }
+  }
+
+  public async getNetworkInsights(data: NetworkInsightsData): Promise<string> {
+    if (!this.ai) {
+      console.warn("API_KEY not found. Using mock data for Gemini insights.");
+      return this.getMockInsights(data);
+    }
+
+    const prompt = `
+      You are an expert network analyst providing insights for a network simulation tool.
+      Based on the following data from a user-designed ad hoc network, provide a concise analysis.
+
+      Network Data:
+      - Node Count: ${data.nodeCount}
+      - Connection Count: ${data.connectionCount}
+      - Identified Topology: ${data.topology}
+      - Average Node Degree: ${(data.avgDegree).toFixed(2)}
+      - Isolated Nodes (0 connections): ${data.isolatedNodes}
+      - Potential Bottlenecks (nodes with high connectivity): ${data.bottlenecks}
+      - Average Energy Efficiency: ${data.avgEnergyEfficiency.toFixed(1)}%
+      - Weak Nodes (efficiency < 85%): ${data.weakNodes}
+
+      Please structure your response with the following sections, using markdown bold for headers (e.g., **Overall Health**). Do not use any other markdown.
+
+      **Overall Health:** A one-sentence summary of the network's condition.
+      **Strengths:** 2-3 bullet points on what is good about this configuration. Use '*' for bullet points.
+      **Risks & Weaknesses:** 2-3 bullet points on potential issues or risks. Use '*' for bullet points.
+      **Recommendations:** 2-3 bullet points with actionable advice for improvement. Use '*' for bullet points.
+
+      Keep the language clear, direct, and helpful for someone designing a network.
+    `;
+
+    try {
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
+      return response.text;
+    } catch (error) {
+      console.error("Error fetching insights from Gemini API:", error);
+      return "**Error:** Could not generate network insights. The API may be unavailable.";
+    }
+  }
+
+  private getMockInsights(data: NetworkInsightsData): string {
+    return `
+      **Overall Health:** A moderately robust network with good potential, but requires attention to connectivity and node health.
+      **Strengths:**
+      * The cluster-based structure is efficient for scalability.
+      * A majority of nodes have high energy efficiency.
+      **Risks & Weaknesses:**
+      * ${data.isolatedNodes > 0 ? `There are ${data.isolatedNodes} isolated nodes that cannot communicate.` : 'Connectivity seems generally good.'}
+      * The presence of ${data.weakNodes} weak nodes will negatively impact the network's lifetime.
+      **Recommendations:**
+      * Use the 'Auto-Connect' feature to ensure all nodes are part of the network.
+      * Consider removing weak nodes using the 'Reconstruct' option in the report dashboard.
+    `;
   }
 
   private getMockDescription(topology: string): string {

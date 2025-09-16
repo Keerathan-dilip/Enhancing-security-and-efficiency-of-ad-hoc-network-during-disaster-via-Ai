@@ -1,5 +1,5 @@
 import React, { useState, MouseEvent, forwardRef } from 'react';
-import { Node, Connection, NetworkComponentType } from '../types';
+import { Node, Connection, NetworkComponentType, AnimatedPacket } from '../types';
 import { NodeIcon } from './NodeIcon';
 
 interface NetworkCanvasProps {
@@ -9,8 +9,11 @@ interface NetworkCanvasProps {
   setConnections: React.Dispatch<React.SetStateAction<Connection[]>>;
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
+  selectedConnectionId: string | null;
+  setSelectedConnectionId: (id: string | null) => void;
   onAddComponent: (type: NetworkComponentType, x: number, y: number) => void;
   isConnectionMode: boolean;
+  animatedPackets: AnimatedPacket[];
 }
 
 const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
@@ -20,12 +23,21 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   setConnections,
   selectedNodeId,
   setSelectedNodeId,
+  selectedConnectionId,
+  setSelectedConnectionId,
   onAddComponent,
   isConnectionMode,
+  animatedPackets,
 }, ref) => {
   const [draggingNode, setDraggingNode] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [connectingLine, setConnectingLine] = useState<{ x: number; y: number } | null>(null);
+
+  const handleConnectionClick = (e: MouseEvent, connectionId: string) => {
+    e.stopPropagation();
+    setSelectedConnectionId(connectionId);
+    setSelectedNodeId(null);
+  };
 
   const handleMouseDown = (e: MouseEvent<HTMLDivElement>, id: string) => {
     e.stopPropagation();
@@ -42,9 +54,11 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
         } else {
             setIsConnecting(id);
             setSelectedNodeId(null);
+            setSelectedConnectionId(null);
         }
     } else {
         setSelectedNodeId(id);
+        setSelectedConnectionId(null);
         const node = nodes.find(n => n.id === id);
         const canvasEl = (ref as React.RefObject<HTMLDivElement>)?.current;
         if (node && canvasEl) {
@@ -92,6 +106,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   const handleCanvasClick = () => {
     if (!isConnectionMode) {
         setSelectedNodeId(null);
+        setSelectedConnectionId(null);
     }
     setIsConnecting(null);
     setConnectingLine(null);
@@ -118,6 +133,27 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
     onAddComponent(type, x, y);
   };
 
+  const getPacketPosition = (packet: AnimatedPacket) => {
+    const totalSegments = packet.path.length - 1;
+    if (totalSegments <= 0) return null;
+
+    const progressPerSegment = 1 / totalSegments;
+    const currentSegmentIndex = Math.min(Math.floor(packet.progress / progressPerSegment), totalSegments - 1);
+    const progressInSegment = (packet.progress % progressPerSegment) / progressPerSegment;
+
+    const fromNodeId = packet.path[currentSegmentIndex];
+    const toNodeId = packet.path[currentSegmentIndex + 1];
+
+    const fromNode = nodes.find(n => n.id === fromNodeId);
+    const toNode = nodes.find(n => n.id === toNodeId);
+
+    if (!fromNode || !toNode) return null;
+
+    const x = fromNode.x + (toNode.x - fromNode.x) * progressInSegment;
+    const y = fromNode.y + (toNode.y - fromNode.y) * progressInSegment;
+
+    return { x, y };
+  };
 
   return (
     <div
@@ -136,7 +172,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
                 Connection Mode Active: Click two nodes to connect them.
             </div>
         )}
-      <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
+      <svg className="absolute top-0 left-0 w-full h-full">
         {/* Render connection preview line */}
         {isConnecting && connectingLine && (() => {
             const fromNode = nodes.find(n => n.id === isConnecting);
@@ -150,6 +186,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
                     stroke="#22d3ee"
                     strokeWidth="2"
                     strokeDasharray="5 5"
+                    className="pointer-events-none"
                 />
             );
         })()}
@@ -158,17 +195,49 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
           const fromNode = nodes.find(n => n.id === conn.from);
           const toNode = nodes.find(n => n.id === conn.to);
           if (!fromNode || !toNode) return null;
+          const isSelected = conn.id === selectedConnectionId;
           return (
-            <line
-              key={conn.id}
-              x1={fromNode.x}
-              y1={fromNode.y}
-              x2={toNode.x}
-              y2={toNode.y}
-              stroke="#67e8f9"
-              strokeWidth="2"
-              strokeOpacity="0.5"
-            />
+             <g key={conn.id} onClick={(e) => handleConnectionClick(e, conn.id)} className="cursor-pointer">
+                <line // Invisible thicker line for easier clicking
+                    x1={fromNode.x} y1={fromNode.y}
+                    x2={toNode.x} y2={toNode.y}
+                    stroke="transparent"
+                    strokeWidth="12"
+                />
+                <line // Visible line
+                    x1={fromNode.x} y1={fromNode.y}
+                    x2={toNode.x} y2={toNode.y}
+                    stroke={isSelected ? '#facc15' : '#67e8f9'}
+                    strokeWidth={isSelected ? 4 : 2}
+                    strokeOpacity={isSelected ? 1 : 0.5}
+                    className="transition-all duration-150"
+                />
+            </g>
+          );
+        })}
+
+        {/* Render animated packets */}
+        {animatedPackets.map(packet => {
+          const pos = getPacketPosition(packet);
+          if (!pos) return null;
+          return (
+            <circle
+              key={packet.id}
+              cx={pos.x}
+              cy={pos.y}
+              r="6"
+              fill={packet.color}
+              stroke="white"
+              strokeWidth="1"
+              className="pointer-events-none"
+            >
+              <animate
+                attributeName="r"
+                values="6;8;6"
+                dur="1s"
+                repeatCount="indefinite"
+              />
+            </circle>
           );
         })}
       </svg>

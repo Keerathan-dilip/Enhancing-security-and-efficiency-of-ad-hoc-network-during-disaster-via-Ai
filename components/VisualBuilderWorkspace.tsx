@@ -1,13 +1,25 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { Node, Connection, NetworkComponentType, NetworkTopology } from '../types';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Node, Connection, NetworkComponentType, NetworkTopology, AnimatedPacket } from '../types';
 import NetworkCanvas from './NetworkCanvas';
 import Toolbar from './Toolbar';
 import PropertiesPanel from './PropertiesPanel';
+import ConnectionPanel from './ConnectionPanel';
 import ReportDashboard from './ReportDashboard';
 import { networkAnalysisService } from '../services/networkAnalysisService';
 import { geminiService } from '../services/geminiService';
+import { pathfindingService } from '../services/pathfindingService';
+import AIInsightsPanel from './AIInsightsPanel';
 
 const WEAK_NODE_EFFICIENCY_THRESHOLD = 85;
+const PACKET_ANIMATION_DURATION_AI = 4000; // ms
+const PACKET_ANIMATION_DURATION_TRADITIONAL = 5500; // ms
+
+interface VisualBuilderWorkspaceProps {
+    nodes: Node[];
+    setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+    connections: Connection[];
+    setConnections: React.Dispatch<React.SetStateAction<Connection[]>>;
+}
 
 const FormattedDescription: React.FC<{ text: string }> = ({ text }) => {
     const parts = text.split(/(\*\*.*?\*\*)/g).filter(part => part.length > 0);
@@ -28,32 +40,141 @@ const FormattedDescription: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-const VisualBuilderWorkspace: React.FC = () => {
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [connections, setConnections] = useState<Connection[]>([]);
+const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, setNodes, connections, setConnections }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   
   const [analysisResult, setAnalysisResult] = useState<{ topology: string; description: string } | null>(null);
   const [simulationParams, setSimulationParams] = useState<any | null>(null);
+  const [insights, setInsights] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [isConnectionMode, setIsConnectionMode] = useState(false);
+  const [animatedPackets, setAnimatedPackets] = useState<AnimatedPacket[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
+  const clearAnalysis = useCallback(() => {
+    setAnalysisResult(null);
+    setSimulationParams(null);
+    setInsights(null);
+    setAnimatedPackets([]);
+    setSelectedConnectionId(null);
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+  }, []);
+
+  const deleteSelectedConnection = useCallback(() => {
+    if (selectedConnectionId) {
+        setConnections(prev => prev.filter(c => c.id !== selectedConnectionId));
+        setSelectedConnectionId(null);
+        clearAnalysis();
+    }
+  }, [selectedConnectionId, setConnections, clearAnalysis]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+        if ((event.key === 'Delete' || event.key === 'Backspace') && selectedConnectionId) {
+            deleteSelectedConnection();
+        }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedConnectionId, deleteSelectedConnection]);
+
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  const startPacketAnimation = (path: string[]) => {
+    const startTime = performance.now();
+    const newPackets: AnimatedPacket[] = [
+      { id: 'packet-ai', path, progress: 0, color: '#22d3ee', startTime, duration: PACKET_ANIMATION_DURATION_AI },
+      { id: 'packet-trad', path, progress: 0, color: '#f97316', startTime, duration: PACKET_ANIMATION_DURATION_TRADITIONAL },
+    ];
+
+    const animate = (time: number) => {
+      let allDone = true;
+      setAnimatedPackets(prevPackets => {
+        return prevPackets.map(p => {
+          const elapsedTime = time - p.startTime;
+          const progress = Math.min(elapsedTime / p.duration, 1);
+          if (progress < 1) allDone = false;
+          return { ...p, progress };
+        });
+      });
+
+      if (!allDone) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+         setTimeout(() => setAnimatedPackets([]), 1000); // clear packets after a delay
+      }
+    };
+
+    setAnimatedPackets(newPackets);
+    animationFrameRef.current = requestAnimationFrame(animate);
+  };
+
 
   const toggleConnectionMode = () => {
     setIsConnectionMode(prev => !prev);
     setSelectedNodeId(null); // Deselect nodes when entering/exiting mode
+    setSelectedConnectionId(null);
   };
 
   const addNode = (type: NetworkComponentType, x: number, y: number) => {
-    const newNode: Node = {
-      id: `node-${Date.now()}`,
+    const baseNode = {
+      id: `${type.toLowerCase()}-${Date.now()}`,
       type,
       x,
       y,
       ipAddress: `192.168.1.${nodes.length + 1}`,
-      energyEfficiency: Math.round(80 + Math.random() * 20),
-      energySpent: Math.round(Math.random() * 10),
     };
+
+    let newNode: Node;
+
+    switch (type) {
+      case NetworkComponentType.ROUTER:
+        newNode = {
+          ...baseNode,
+          energyEfficiency: 100, // Assumed to be stable/mains-powered
+          energySpent: 25,       // Higher power consumption
+          packetForwardingCapacity: 5000,
+        };
+        break;
+      case NetworkComponentType.SWITCH:
+        newNode = {
+          ...baseNode,
+          energyEfficiency: 100,
+          energySpent: 10,
+          portCount: 16,
+        };
+        break;
+      case NetworkComponentType.BASE_STATION:
+        newNode = {
+          ...baseNode,
+          energyEfficiency: 100,
+          energySpent: 50, // Very high power
+        };
+        break;
+      case NetworkComponentType.NODE:
+      default:
+        newNode = {
+          ...baseNode,
+          energyEfficiency: Math.round(80 + Math.random() * 20), // Represents battery life
+          energySpent: Math.round(Math.random() * 10) + 5,      // Lower consumption
+        };
+        break;
+    }
     setNodes((prev) => [...prev, newNode]);
   };
 
@@ -78,7 +199,7 @@ const VisualBuilderWorkspace: React.FC = () => {
         y,
         ipAddress: `192.168.1.${i + 1}`,
         energyEfficiency: Math.round(80 + Math.random() * 20),
-        energySpent: Math.round(Math.random() * 10),
+        energySpent: Math.round(Math.random() * 10) + 5,
     });
 
     if (topology === 'random') {
@@ -175,18 +296,17 @@ const VisualBuilderWorkspace: React.FC = () => {
     setNodes(newNodes);
     setConnections(newConnections);
     setSelectedNodeId(null);
-    setAnalysisResult(null);
-    setSimulationParams(null);
+    clearAnalysis();
     setIsConnectionMode(false);
-  }, []);
+  }, [setNodes, setConnections, clearAnalysis]);
 
   const updateNode = useCallback((updatedNode: Node) => {
     setNodes((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
-  }, []);
+  }, [setNodes]);
 
   const updateNodeIp = useCallback((nodeId: string, ipAddress: string) => {
     setNodes(prev => prev.map(n => (n.id === nodeId ? { ...n, ipAddress } : n)));
-  }, []);
+  }, [setNodes]);
 
   const handleAutoConnect = useCallback((k: number) => {
     if (nodes.length < 2 || k <= 0) return;
@@ -224,33 +344,53 @@ const VisualBuilderWorkspace: React.FC = () => {
         }
     }
     setConnections(newConnections);
-    setAnalysisResult(null);
-    setSimulationParams(null);
-  }, [nodes]);
+    clearAnalysis();
+  }, [nodes, setConnections, clearAnalysis]);
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
-    setAnalysisResult(null);
-    setSimulationParams(null);
+    setIsGeneratingInsights(true);
+    clearAnalysis();
     setIsConnectionMode(false);
     try {
       const topology = networkAnalysisService.identifyTopology(nodes, connections);
-      const description = await geminiService.getTopologyDescription(topology);
-      setAnalysisResult({ topology, description });
+      
+      const descriptionPromise = geminiService.getTopologyDescription(topology);
+      const insightsPromise = (async () => {
+        const networkData = networkAnalysisService.getNetworkStats(nodes, connections);
+        return await geminiService.getNetworkInsights({ ...networkData, topology });
+      })();
 
       const params = networkAnalysisService.simulatePerformance(topology, nodes, connections);
       setSimulationParams(params);
+
+      const description = await descriptionPromise;
+      setAnalysisResult({ topology, description });
+      
+      const generatedInsights = await insightsPromise;
+      setInsights(generatedInsights);
+      
+      const farthestNodes = pathfindingService.findFarthestNodes(nodes);
+      if (farthestNodes) {
+        const path = pathfindingService.findShortestPath(farthestNodes[0], farthestNodes[1], nodes, connections);
+        if (path) {
+          startPacketAnimation(path);
+        }
+      }
+
     } catch (error) {
       console.error("Analysis failed:", error);
       setAnalysisResult({ topology: 'Error', description: 'Failed to analyze network. Please check console.' });
+      setInsights('**Error:** Could not generate network insights.');
     } finally {
       setIsAnalyzing(false);
+      setIsGeneratingInsights(false);
     }
   };
 
   const handleReconstruct = useCallback(async () => {
     const weakNodeIds = nodes
-      .filter(n => n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD)
+      .filter(n => n.type === NetworkComponentType.NODE && n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD)
       .map(n => n.id);
 
     if (weakNodeIds.length === 0) return;
@@ -261,29 +401,47 @@ const VisualBuilderWorkspace: React.FC = () => {
     setNodes(newNodes);
     setConnections(newConnections);
     setSelectedNodeId(null);
+    setInsights(null);
+    setAnimatedPackets([]);
     
     alert(`Removed ${weakNodeIds.length} weaker node(s). The network report will now be updated.`);
     
     if (newNodes.length >= 2) {
+      setIsGeneratingInsights(true);
       try {
         const topology = networkAnalysisService.identifyTopology(newNodes, newConnections);
-        const description = await geminiService.getTopologyDescription(topology);
-        setAnalysisResult({ topology, description });
-
+        
+        const descriptionPromise = geminiService.getTopologyDescription(topology);
+        const insightsPromise = (async () => {
+            const networkData = networkAnalysisService.getNetworkStats(newNodes, newConnections);
+            return await geminiService.getNetworkInsights({ ...networkData, topology });
+        })();
+        
+        setAnalysisResult({ topology, description: "Loading..." });
         const params = networkAnalysisService.simulatePerformance(topology, newNodes, newConnections);
         setSimulationParams(params);
+
+        const description = await descriptionPromise;
+        setAnalysisResult({ topology, description });
+
+        const newInsights = await insightsPromise;
+        setInsights(newInsights);
+
       } catch (error) {
         console.error("Re-analysis failed after reconstruction:", error);
         setAnalysisResult({ topology: 'Error', description: 'Failed to re-analyze network.' });
+        setInsights('**Error:** Could not regenerate insights after reconstruction.');
+      } finally {
+        setIsGeneratingInsights(false);
       }
     } else {
-        setAnalysisResult(null);
-        setSimulationParams(null);
+        clearAnalysis();
     }
-  }, [nodes, connections]);
+  }, [nodes, connections, setNodes, setConnections, clearAnalysis]);
   
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
-  const weakNodes = nodes.filter(n => n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD);
+  const selectedConnection = connections.find(c => c.id === selectedConnectionId) || null;
+  const weakNodes = nodes.filter(n => n.type === NetworkComponentType.NODE && n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD);
 
   return (
     <div className="h-full flex flex-col gap-4 animate-fadeIn">
@@ -299,11 +457,15 @@ const VisualBuilderWorkspace: React.FC = () => {
                 onAutoConnect={handleAutoConnect}
             />
             {selectedNode && !isConnectionMode && <PropertiesPanel node={selectedNode} onUpdate={updateNode} />}
+            {selectedConnection && !isConnectionMode && <ConnectionPanel connection={selectedConnection} nodes={nodes} onDelete={deleteSelectedConnection} />}
             {analysisResult && (
-                <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 flex-grow">
+                <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4">
                     <h3 className="text-lg font-bold text-cyan-300 mb-2">Topology Analysis: <strong className="text-white">{analysisResult.topology}</strong></h3>
                     <FormattedDescription text={analysisResult.description} />
                 </div>
+            )}
+            {(isAnalyzing || insights) && (
+              <AIInsightsPanel isLoading={isGeneratingInsights} insights={insights} />
             )}
         </div>
         <div className="w-full lg:w-3/4 xl:w-4/5">
@@ -315,8 +477,11 @@ const VisualBuilderWorkspace: React.FC = () => {
                 setConnections={setConnections}
                 selectedNodeId={selectedNodeId}
                 setSelectedNodeId={setSelectedNodeId}
+                selectedConnectionId={selectedConnectionId}
+                setSelectedConnectionId={setSelectedConnectionId}
                 onAddComponent={addNode}
                 isConnectionMode={isConnectionMode}
+                animatedPackets={animatedPackets}
             />
         </div>
       </div>

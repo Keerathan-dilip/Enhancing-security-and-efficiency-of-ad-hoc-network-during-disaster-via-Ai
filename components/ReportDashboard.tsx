@@ -4,7 +4,7 @@ import {
     RadialBarChart, RadialBar, PolarAngleAxis,
     AreaChart, Area
 } from 'recharts';
-import { Node, SimulationParameters } from '../types';
+import { Node, SimulationParameters, NetworkComponentType } from '../types';
 import IPConfigurationPanel from './IPConfigurationPanel';
 
 interface ReportDashboardProps {
@@ -239,6 +239,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData, nodes
                         <thead className="text-xs text-cyan-300 uppercase bg-gray-700/50 sticky top-0">
                             <tr>
                                 <th scope="col" className="px-4 py-2">Node ID</th>
+                                <th scope="col" className="px-4 py-2">Type</th>
                                 <th scope="col" className="px-4 py-2">Efficiency (%)</th>
                                 <th scope="col" className="px-4 py-2">Spent (J)</th>
                             </tr>
@@ -247,13 +248,14 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData, nodes
                             {nodes.map((node, index) => (
                                 <tr key={node.id} className="border-b border-gray-700 hover:bg-gray-700/30">
                                     <td className="px-4 py-2 font-medium">Node {index + 1}</td>
-                                    <td className={`px-4 py-2 ${node.energyEfficiency < 85 ? 'text-red-400 font-bold' : 'text-green-400'}`}>{node.energyEfficiency}</td>
+                                    <td className="px-4 py-2 capitalize">{node.type.replace('_', ' ').toLowerCase()}</td>
+                                    <td className={`px-4 py-2 ${node.type === NetworkComponentType.NODE && node.energyEfficiency < 85 ? 'text-red-400 font-bold' : 'text-green-400'}`}>{node.energyEfficiency}</td>
                                     <td className="px-4 py-2">{node.energySpent}</td>
                                 </tr>
                             ))}
                             {nodes.length === 0 && (
                                 <tr>
-                                    <td colSpan={3} className="text-center py-4 text-gray-500">No nodes in the network.</td>
+                                    <td colSpan={4} className="text-center py-4 text-gray-500">No nodes in the network.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -269,7 +271,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ simulationData, nodes
                             <p className="text-red-400 font-semibold mb-2">{weakNodes.length} weaker node(s) detected (efficiency &lt; 85%).</p>
                             <p className="text-sm text-gray-400 mb-4">Removing these nodes can improve overall network lifetime and performance. The network will attempt to reconstruct connections.</p>
                             <ul className="text-xs list-disc list-inside text-gray-400">
-                                {weakNodes.map((node) => <li key={node.id}>Node {nodes.findIndex(n => n.id === node.id) + 1} ({node.id.substring(0,10)}...)</li>)}
+                                {weakNodes.map((node) => <li key={node.id}>Node {nodes.findIndex(n => n.id === node.id) + 1} (End device)</li>)}
                             </ul>
                         </div>
                         <button

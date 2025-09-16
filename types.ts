@@ -18,14 +18,26 @@ export interface Node {
   x: number;
   y: number;
   ipAddress: string;
-  energyEfficiency: number;
-  energySpent: number;
+  energyEfficiency: number; // Represents health/battery for mobile nodes
+  energySpent: number; // Consumption rate
+  // Optional, type-specific properties
+  packetForwardingCapacity?: number; // For ROUTER (packets/sec)
+  portCount?: number; // For SWITCH
 }
 
 export interface Connection {
   id: string;
   from: string;
   to: string;
+}
+
+export interface AnimatedPacket {
+  id:string;
+  path: string[];
+  progress: number; // 0 to 1 over the whole path
+  color: string;
+  startTime: number;
+  duration: number;
 }
 
 export interface SimulationParameters {

@@ -1,12 +1,14 @@
 
 import React, { useState } from 'react';
-import { Workspace } from './types';
+import { Workspace, Node, Connection } from './types';
 import CodeEditorWorkspace from './components/CodeEditorWorkspace';
 import VisualBuilderWorkspace from './components/VisualBuilderWorkspace';
 import WorkspaceSwitcher from './components/WorkspaceSwitcher';
 
 const App: React.FC = () => {
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(Workspace.VISUAL);
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 flex flex-col font-sans">
@@ -19,8 +21,15 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow p-4 lg:p-6">
-        {activeWorkspace === Workspace.CODE && <CodeEditorWorkspace />}
-        {activeWorkspace === Workspace.VISUAL && <VisualBuilderWorkspace />}
+        {activeWorkspace === Workspace.CODE && <CodeEditorWorkspace nodes={nodes} connections={connections} />}
+        {activeWorkspace === Workspace.VISUAL && (
+          <VisualBuilderWorkspace
+            nodes={nodes}
+            setNodes={setNodes}
+            connections={connections}
+            setConnections={setConnections}
+          />
+        )}
       </main>
     </div>
   );
