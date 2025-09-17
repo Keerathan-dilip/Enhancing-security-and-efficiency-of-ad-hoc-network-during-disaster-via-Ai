@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { MOCK_CODE_AWK } from '../constants';
@@ -149,18 +150,44 @@ const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connec
     );
   };
   
-  const Editor: React.FC<{title: string, code: string, setCode: (c: string) => void, highlightedLine: number | null}> = ({title, code, setCode, highlightedLine}) => (
-    <div className="flex flex-col bg-gray-900 rounded-md overflow-hidden border border-cyan-500/10 h-96">
-        <h3 className="p-2 border-b border-cyan-500/20 text-center font-semibold text-cyan-400 bg-gray-900/50">{title}</h3>
-        <div className="flex-grow font-mono text-sm min-h-0">
-             {isRunning ? (
-                <CodeDisplay code={code} highlightedLine={highlightedLine} />
-             ) : (
-                <textarea value={code} onChange={(e) => setCode(e.target.value)} className="w-full h-full bg-transparent text-white resize-none focus:outline-none p-4" aria-label={`${title} Code Editor`} />
-             )}
+  const Editor: React.FC<{title: string, code: string, setCode: (c: string) => void, highlightedLine: number | null}> = ({title, code, setCode, highlightedLine}) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(code).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }, (err) => {
+            console.error('Could not copy text: ', err);
+            alert('Failed to copy text.');
+        });
+    };
+      
+    return (
+        <div className="relative flex flex-col bg-gray-900 rounded-md overflow-hidden border border-cyan-500/10 h-96">
+            <div className="flex justify-between items-center p-2 border-b border-cyan-500/20 bg-gray-900/50">
+              <h3 className="font-semibold text-cyan-400 ">{title}</h3>
+              <button
+                onClick={handleCopy}
+                title="Copy code"
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors duration-200 ${
+                  copied ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+                aria-label={`Copy ${title} code`}
+              >
+                {copied ? 'Copied!' : 'Copy Code'}
+              </button>
+            </div>
+            <div className="flex-grow font-mono text-sm min-h-0">
+                 {isRunning ? (
+                    <CodeDisplay code={code} highlightedLine={highlightedLine} />
+                 ) : (
+                    <textarea value={code} onChange={(e) => setCode(e.target.value)} className="w-full h-full bg-transparent text-white resize-none focus:outline-none p-4" aria-label={`${title} Code Editor`} />
+                 )}
+            </div>
         </div>
-    </div>
-  )
+    );
+  }
 
 
   return (

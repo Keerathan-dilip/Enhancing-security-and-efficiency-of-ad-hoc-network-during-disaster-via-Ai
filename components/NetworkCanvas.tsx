@@ -17,6 +17,8 @@ interface NetworkCanvasProps {
   onNodeClickForSimulation: (id: string) => void;
   packetSimSourceNode: string | null;
   animatedPackets: AnimatedPacket[];
+  isolatedMaliciousNodeIds: string[];
+  droppedPacketEvents: { id: string, x: number, y: number }[];
 }
 
 const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
@@ -34,10 +36,13 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   onNodeClickForSimulation,
   packetSimSourceNode,
   animatedPackets,
+  isolatedMaliciousNodeIds,
+  droppedPacketEvents,
 }, ref) => {
   const [draggingNode, setDraggingNode] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [connectingLine, setConnectingLine] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredPacketId, setHoveredPacketId] = useState<string | null>(null);
 
   const handleConnectionClick = (e: MouseEvent, connectionId: string) => {
     e.stopPropagation();
@@ -189,6 +194,15 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
             </div>
         )}
       <svg className="absolute top-0 left-0 w-full h-full">
+         <style>{`
+          @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+          }
+          .dropped-packet-indicator {
+            animation: fadeInOut 1s ease-in-out;
+          }
+        `}</style>
         {/* Render connection preview line */}
         {isConnecting && connectingLine && (() => {
             const fromNode = nodes.find(n => n.id === isConnecting);
@@ -211,7 +225,17 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
           const fromNode = nodes.find(n => n.id === conn.from);
           const toNode = nodes.find(n => n.id === conn.to);
           if (!fromNode || !toNode) return null;
+          
+          const isFromSwitchDisabled = fromNode.type === NetworkComponentType.SWITCH && fromNode.isEnabled === false;
+          const isToSwitchDisabled = toNode.type === NetworkComponentType.SWITCH && toNode.isEnabled === false;
+          const isMaliciouslyIsolated = isolatedMaliciousNodeIds.includes(conn.from) || isolatedMaliciousNodeIds.includes(conn.to);
+          const isDisabled = isFromSwitchDisabled || isToSwitchDisabled || isMaliciouslyIsolated;
+
           const isSelected = conn.id === selectedConnectionId;
+          const strokeColor = isDisabled ? '#6b7280' : (isSelected ? '#facc15' : '#67e8f9');
+          const strokeOpacity = isDisabled ? 0.4 : (isSelected ? 1 : 0.5);
+          const strokeDash = isDisabled ? "5, 5" : undefined;
+
           return (
              <g key={conn.id} onClick={(e) => handleConnectionClick(e, conn.id)} className="cursor-pointer">
                 <line // Invisible thicker line for easier clicking
@@ -223,9 +247,10 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
                 <line // Visible line
                     x1={fromNode.x} y1={fromNode.y}
                     x2={toNode.x} y2={toNode.y}
-                    stroke={isSelected ? '#facc15' : '#67e8f9'}
+                    stroke={strokeColor}
+                    strokeOpacity={strokeOpacity}
+                    strokeDasharray={strokeDash}
                     strokeWidth={isSelected ? 4 : 2}
-                    strokeOpacity={isSelected ? 1 : 0.5}
                     className="transition-all duration-150"
                 />
             </g>
@@ -237,24 +262,59 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
           const pos = getPacketPosition(packet);
           if (!pos) return null;
           return (
-            <circle
-              key={packet.id}
-              cx={pos.x}
-              cy={pos.y}
-              r="6"
-              fill={packet.color}
-              stroke="white"
-              strokeWidth="1"
-              className="pointer-events-none"
-            >
-              <animate
-                attributeName="r"
-                values="6;8;6"
-                dur="1s"
-                repeatCount="indefinite"
-              />
-            </circle>
+            <g key={packet.id} onMouseEnter={() => setHoveredPacketId(packet.id)} onMouseLeave={() => setHoveredPacketId(null)}>
+              <circle cx={pos.x} cy={pos.y} r="10" fill="transparent" className="cursor-pointer" />
+              <circle
+                cx={pos.x}
+                cy={pos.y}
+                r={packet.isAttackPacket ? 3 : 6}
+                fill={packet.color}
+                stroke="white"
+                strokeWidth={packet.isAttackPacket ? 0.5 : 1}
+                className="pointer-events-none"
+              >
+                {!packet.isAttackPacket && <animate attributeName="r" values="6;8;6" dur="1s" repeatCount="indefinite" />}
+              </circle>
+            </g>
           );
+        })}
+        {/* Dropped packet indicators */}
+        {droppedPacketEvents.map(event => (
+            <text key={event.id} x={event.x} y={event.y} fill="#ef4444" fontSize="24" textAnchor="middle" dominantBaseline="middle" className="dropped-packet-indicator pointer-events-none">
+                ✕
+            </text>
+        ))}
+        {/* Tooltip for hovered packet */}
+        {animatedPackets.map(packet => {
+            if (packet.id !== hoveredPacketId || packet.isAttackPacket) return null;
+            const pos = getPacketPosition(packet);
+            if (!pos) return null;
+            
+            const fromNode = nodes.find(n => n.id === packet.path[0]);
+            const toNode = nodes.find(n => n.id === packet.path[packet.path.length - 1]);
+            const fromNodeIndex = fromNode ? nodes.indexOf(fromNode) + 1 : '?';
+            const toNodeIndex = toNode ? nodes.indexOf(toNode) + 1 : '?';
+
+            const pathString = packet.path.map(nodeId => {
+                const node = nodes.find(n => n.id === nodeId);
+                const nodeIndex = node ? nodes.indexOf(node) + 1 : '?';
+                return `Node ${nodeIndex}`;
+            }).join(' → ');
+
+            return (
+                <foreignObject key={`tooltip-${packet.id}`} x={pos.x + 10} y={pos.y + 10} width="250" height="150" className="pointer-events-none">
+                    <div className="bg-gray-900/80 backdrop-blur-sm border border-cyan-500/50 rounded-lg p-2 text-white text-xs shadow-lg">
+                        <p className="font-bold text-cyan-400">Packet In Transit</p>
+                        <p><span className="font-semibold">From:</span> Node {fromNodeIndex}</p>
+                        <p><span className="font-semibold">To:</span> Node {toNodeIndex}</p>
+                        <p><span className="font-semibold">Full Path:</span> {pathString}</p>
+                        <p className="mt-1 font-semibold">Message:</p>
+                        <p className="whitespace-pre-wrap break-words max-h-16 overflow-y-auto font-mono text-gray-300 text-[11px] bg-black/20 p-1 rounded">
+                          {packet.message}
+                        </p>
+                    </div>
+                </foreignObject>
+            );
         })}
       </svg>
       {nodes.map((node, index) => {
@@ -276,6 +336,9 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
             style={{ left: node.x, top: node.y, transform: 'translate(-50%, -50%)' }}
             onMouseDown={e => handleMouseDown(e, node.id)}
             >
+             {node.isMalicious && (
+                <div className="absolute inset-0 rounded-full bg-red-500/50 animate-pulse"></div>
+              )}
             <NodeIcon type={node.type} />
             <span className="absolute text-white text-xs font-bold pointer-events-none" style={{ textShadow: '0 0 3px black' }}>
                 {index + 1}

@@ -6,12 +6,15 @@ interface ToolbarProps {
   onAnalyze: () => void;
   isAnalyzing: boolean;
   nodeCount: number;
-  onGenerateNetwork: (count: number, topology: NetworkTopology) => void;
+  onGenerateNetwork: (count: number, topology: NetworkTopology, includeRouters: boolean, includeSwitches: boolean) => void;
   isConnectionMode: boolean;
   onToggleConnectionMode: () => void;
   isPacketSimulationMode: boolean;
   onTogglePacketSimulationMode: () => void;
   onAutoConnect: (k: number) => void;
+  onDownloadReport: () => void;
+  analysisPerformed: boolean;
+  isDownloadingReport: boolean;
 }
 
 const Tool: React.FC<{ type: NetworkComponentType, onDragStart: (e: React.DragEvent, type: NetworkComponentType) => void }> = ({ type, onDragStart }) => {
@@ -37,6 +40,7 @@ const TOPOLOGY_INFO: Record<NetworkTopology, string> = {
   bus: 'Nodes on a shared line. Simple but can have collisions. (e.g., CSMA/CD)',
   grid: 'Nodes in a uniform grid layout. Structured and predictable.',
   random: 'Nodes placed randomly. Simulates unpredictable environments.',
+  star: 'All nodes connect to a central hub. Simple but has a single point of failure.',
 };
 
 
@@ -49,11 +53,16 @@ const Toolbar: React.FC<ToolbarProps> = ({
     onToggleConnectionMode, 
     isPacketSimulationMode,
     onTogglePacketSimulationMode,
-    onAutoConnect 
+    onAutoConnect,
+    onDownloadReport,
+    analysisPerformed,
+    isDownloadingReport,
 }) => {
   const [generateCount, setGenerateCount] = useState(50);
   const [topology, setTopology] = useState<NetworkTopology>('cluster');
   const [kNeighbors, setKNeighbors] = useState(2);
+  const [includeRouters, setIncludeRouters] = useState(true);
+  const [includeSwitches, setIncludeSwitches] = useState(false);
     
   const handleDragStart = (e: React.DragEvent, type: NetworkComponentType) => {
     e.dataTransfer.setData('application/reactflow', type);
@@ -65,7 +74,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           alert('Maximum number of nodes is 450.');
           return;
       }
-      onGenerateNetwork(generateCount, topology);
+      onGenerateNetwork(generateCount, topology, includeRouters, includeSwitches);
   }
 
   return (
@@ -105,12 +114,23 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 >
                     <option value="cluster">Cluster</option>
                     <option value="mesh">Mesh</option>
+                    <option value="star">Star</option>
                     <option value="ring">Ring</option>
                     <option value="bus">Bus</option>
                     <option value="grid">Grid</option>
                     <option value="random">Random</option>
                 </select>
                 <p className="text-xs text-gray-400 mt-1 h-10">{TOPOLOGY_INFO[topology]}</p>
+             </div>
+             <div className="space-y-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" checked={includeRouters} onChange={e => setIncludeRouters(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
+                    <span className="text-sm text-gray-300">Include Routers</span>
+                </label>
+                 <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" checked={includeSwitches} onChange={e => setIncludeSwitches(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
+                    <span className="text-sm text-gray-300">Include Switches</span>
+                </label>
              </div>
              <button
                 onClick={handleGenerate}
@@ -177,7 +197,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </div>
       </div>
 
-      <div className="pt-4 border-t border-cyan-500/20">
+      <div className="pt-4 border-t border-cyan-500/20 space-y-3">
          <button
             onClick={onAnalyze}
             disabled={isAnalyzing || nodeCount < 2}
@@ -195,6 +215,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 </svg>
             )}
             <span>{isAnalyzing ? 'Analyzing...' : 'Analyze Network'}</span>
+        </button>
+        <button
+            onClick={onDownloadReport}
+            disabled={!analysisPerformed || isDownloadingReport}
+            className="w-full px-5 py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+        >
+            {isDownloadingReport ? (
+                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+            )}
+            <span>{isDownloadingReport ? 'Generating...' : 'Download Full Report'}</span>
         </button>
       </div>
     </div>

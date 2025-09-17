@@ -73,7 +73,8 @@ class NetworkAnalysisService {
   public simulatePerformance(
     topology: string,
     nodes: Node[],
-    connections: Connection[]
+    connections: Connection[],
+    maliciousNodeIds: string[] = []
   ): { 'AI-Based': SimulationParameters; 'Traditional': SimulationParameters } {
     const nodeCount = nodes.length;
     if (nodeCount === 0) {
@@ -122,6 +123,18 @@ class NetworkAnalysisService {
     const scaleFactor = 1 + (endNodes.length / 150);
     aiBased['End-to-end Delay (ms)'] = Math.round(aiBased['End-to-end Delay (ms)'] * scaleFactor);
     traditional['End-to-end Delay (ms)'] = Math.round(traditional['End-to-end Delay (ms)'] * scaleFactor * 1.1);
+
+    // 4. Malicious Node Penalties
+    if (maliciousNodeIds.length > 0) {
+        const attackSeverity = 1 + maliciousNodeIds.length / nodes.length * 5;
+        traditional['Packet Delivery Ratio'] *= (0.3 / attackSeverity);
+        traditional['End-to-end Delay (ms)'] *= (1.5 * attackSeverity);
+        traditional['Robustness Index'] *= 0.2;
+        traditional['Network Lifetime (days)'] *= 0.5;
+        // AI model is resilient
+        aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index'] * 1.05);
+    }
+
 
     return {
       'AI-Based': aiBased,

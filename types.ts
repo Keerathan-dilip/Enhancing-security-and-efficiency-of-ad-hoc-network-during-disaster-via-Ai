@@ -10,7 +10,7 @@ export enum NetworkComponentType {
   BASE_STATION = 'BASE_STATION',
 }
 
-export type NetworkTopology = 'random' | 'grid' | 'cluster' | 'mesh' | 'ring' | 'bus';
+export type NetworkTopology = 'random' | 'grid' | 'cluster' | 'mesh' | 'ring' | 'bus' | 'star';
 
 export interface Node {
   id: string;
@@ -20,9 +20,12 @@ export interface Node {
   ipAddress: string;
   energyEfficiency: number; // Represents health/battery for mobile nodes
   energySpent: number; // Consumption rate
+  isMalicious?: boolean;
   // Optional, type-specific properties
   packetForwardingCapacity?: number; // For ROUTER (packets/sec)
   portCount?: number; // For SWITCH
+  isEnabled?: boolean; // For SWITCH
+  isReceiver?: boolean; // For BASE_STATION
 }
 
 export interface Connection {
@@ -38,6 +41,17 @@ export interface AnimatedPacket {
   color: string;
   startTime: number;
   duration: number;
+  message?: string;
+  isAttackPacket?: boolean;
+}
+
+export interface DeliveredPacketInfo {
+  id: string;
+  from: string;
+  to: string;
+  message: string;
+  path: string[];
+  status: 'delivered' | 'dropped';
 }
 
 export interface SimulationParameters {

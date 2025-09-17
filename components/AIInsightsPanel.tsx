@@ -19,7 +19,7 @@ const Section: React.FC<{ title: string; content: string[] }> = ({ title, conten
 const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ isLoading, insights }) => {
   if (isLoading) {
     return (
-      <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 space-y-3 animate-fadeIn flex items-center justify-center h-48">
+      <div className="bg-gray-800/60 p-4 space-y-3 animate-fadeIn flex items-center justify-center min-h-[12rem]">
           <div className="flex flex-col items-center">
              <svg className="animate-spin h-8 w-8 text-cyan-400 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -52,23 +52,25 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ isLoading, insights }
   const hasError = insights.toLowerCase().includes('error');
 
   return (
-    <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 space-y-3 animate-fadeIn">
+    <div className="p-4">
       <h3 className={`text-lg font-bold ${hasError ? 'text-red-400' : 'text-cyan-300'}`}>
         {hasError ? 'Insight Generation Failed' : 'AI-Powered Insights'}
       </h3>
-      {hasError && !sections['Error'] ? <p className="text-red-300">{insights}</p> : null}
-      {Object.entries(sections).map(([title, content]) => {
-        if (content.length === 0) return null;
-        if (title.toLowerCase() === 'overall health') {
-          return (
-            <div key={title}>
-              <h4 className="font-semibold text-cyan-300 mb-1">{title}</h4>
-              <p className="text-sm text-gray-300 italic">"{content.join(' ')}"</p>
-            </div>
-          );
-        }
-        return <Section key={title} title={title} content={content} />;
-      })}
+      <div className="mt-3 space-y-3">
+        {hasError && !sections['Error'] ? <p className="text-red-300">{insights}</p> : null}
+        {Object.entries(sections).map(([title, content]) => {
+          if (content.length === 0) return null;
+          if (title.toLowerCase() === 'overall health') {
+            return (
+              <div key={title}>
+                <h4 className="font-semibold text-cyan-300 mb-1">{title}</h4>
+                <p className="text-sm text-gray-300 italic">"{content.join(' ')}"</p>
+              </div>
+            );
+          }
+          return <Section key={title} title={title} content={content} />;
+        })}
+      </div>
     </div>
   );
 };

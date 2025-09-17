@@ -1,16 +1,17 @@
-import { Node, Connection } from '../types';
+import { Node, Connection, NetworkComponentType } from '../types';
 
 class PathfindingService {
-  public findFarthestNodes(nodes: Node[]): [string, string] | null {
-    if (nodes.length < 2) return null;
+  public findFarthestNodes(nodes: Node[], excludeNodeIds: string[] = []): [string, string] | null {
+    const validNodes = nodes.filter(n => !excludeNodeIds.includes(n.id));
+    if (validNodes.length < 2) return null;
 
     let maxDist = -1;
     let farthestPair: [string, string] | null = null;
 
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const n1 = nodes[i];
-        const n2 = nodes[j];
+    for (let i = 0; i < validNodes.length; i++) {
+      for (let j = i + 1; j < validNodes.length; j++) {
+        const n1 = validNodes[i];
+        const n2 = validNodes[j];
         const dist = Math.sqrt(Math.pow(n1.x - n2.x, 2) + Math.pow(n1.y - n2.y, 2));
         if (dist > maxDist) {
           maxDist = dist;
@@ -21,15 +22,26 @@ class PathfindingService {
     return farthestPair;
   }
 
-  public findShortestPath(startNodeId: string, endNodeId: string, nodes: Node[], connections: Connection[]): string[] | null {
-    if (!startNodeId || !endNodeId || nodes.length === 0) return null;
+  public findShortestPath(startNodeId: string, endNodeId: string, nodes: Node[], connections: Connection[], excludeNodeIds: string[] = []): string[] | null {
+    if (!startNodeId || !endNodeId || nodes.length === 0 || excludeNodeIds.includes(startNodeId) || excludeNodeIds.includes(endNodeId)) return null;
 
     const adjacency: { [key: string]: string[] } = {};
-    nodes.forEach(n => adjacency[n.id] = []);
+    nodes.forEach(n => {
+        if (!excludeNodeIds.includes(n.id)) {
+            adjacency[n.id] = [];
+        }
+    });
+
+    const disabledSwitches = new Set(nodes.filter(n => n.type === NetworkComponentType.SWITCH && n.isEnabled === false).map(n => n.id));
+
     connections.forEach(c => {
+      if (disabledSwitches.has(c.from) || disabledSwitches.has(c.to) || excludeNodeIds.includes(c.from) || excludeNodeIds.includes(c.to)) {
+        return; // Skip connections involving disabled or excluded nodes
+      }
       adjacency[c.from]?.push(c.to);
       adjacency[c.to]?.push(c.from);
     });
+
 
     const queue: string[][] = [[startNodeId]];
     const visited = new Set<string>([startNodeId]);
