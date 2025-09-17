@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { MOCK_CODE_CPP, MOCK_CODE_TCL, MOCK_CODE_AWK } from '../constants';
+import { MOCK_CODE_AWK } from '../constants';
 import { SimulationParameters, Node, Connection } from '../types';
 import CodeDisplay from './CodeDisplay';
 import { networkAnalysisService } from '../services/networkAnalysisService';
+import { codeGenerationService } from '../services/codeGenerationService';
 
 
 interface CodeEditorWorkspaceProps {
@@ -14,7 +15,7 @@ interface CodeEditorWorkspaceProps {
 type ResultsTab = 'charts' | 'awk';
 
 const ANIMATION_SEQUENCES = {
-    cpp: [13, 17, 21, 28, 32, 36, 42, 44, 45, 47],
+    cpp: [14, 18, 22, 29, 33, 37, 43, 45, 46, 48],
     tcl: [5, 8, 11, 14, 15, 18, 22, 26, 30, 33],
     awk: [6, 14, 24, 25, 14, 24, 25, 14, 30, 31, 32],
 };
@@ -48,14 +49,21 @@ const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connec
   const [isRunning, setIsRunning] = useState(false);
   const [activeResultsTab, setActiveResultsTab] = useState<ResultsTab>('charts');
   
-  const [cppCode, setCppCode] = useState(MOCK_CODE_CPP);
-  const [tclCode, setTclCode] = useState(MOCK_CODE_TCL);
+  const [cppCode, setCppCode] = useState('');
+  const [tclCode, setTclCode] = useState('');
   const [awkCode, setAwkCode] = useState(MOCK_CODE_AWK);
 
   const [highlightedCppLine, setHighlightedCppLine] = useState<number | null>(null);
   const [highlightedTclLine, setHighlightedTclLine] = useState<number | null>(null);
   const [highlightedAwkLine, setHighlightedAwkLine] = useState<number | null>(null);
   const animationIntervalRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const newCppCode = codeGenerationService.generateCppCode(nodes, connections);
+    const newTclCode = codeGenerationService.generateTclCode(nodes, connections);
+    setCppCode(newCppCode);
+    setTclCode(newTclCode);
+  }, [nodes, connections]);
 
   useEffect(() => {
     return () => {
@@ -189,7 +197,7 @@ const CodeEditorWorkspace: React.FC<CodeEditorWorkspaceProps> = ({ nodes, connec
              <div className="flex-grow flex flex-col min-h-0">
                  <div className="border-b border-orange-500/20 flex space-x-2 mb-4" role="tablist" aria-label="Results View">
                     <ResultsTabButton tabType="charts" label="Performance Charts" />
-                    {awkOutput && <ResultsTabButton tabType="awk" label="AWK Output" />}
+                    {awkOutput && <ResultsTabButton tabType="awk" label="Final Simulation Results" />}
                 </div>
                 <div className="flex-grow overflow-y-auto pr-2">
                     {activeResultsTab === 'charts' && (
