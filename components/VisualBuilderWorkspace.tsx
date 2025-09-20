@@ -1146,6 +1146,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                   animatedPackets={animatedPackets}
                   isolatedMaliciousNodeIds={isolatedMaliciousNodeIds}
                   droppedPacketEvents={droppedPacketEvents}
+                  weakNodeIds={weakNodes.map(n => n.id)}
               />
           </div>
         </div>

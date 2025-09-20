@@ -129,8 +129,12 @@ class NetworkAnalysisService {
     aiBased['Network Lifetime (days)'] *= lifetimeFactor;
     traditional['Network Lifetime (days)'] *= lifetimeFactor * 0.85;
     
-    aiBased['Energy Efficiency'] = Math.min(0.98, avgEndNodeEfficiency);
-    traditional['Energy Efficiency'] = Math.min(0.94, avgEndNodeEfficiency * 0.95);
+    // Remap energy efficiency to user-specified range
+    // avgEndNodeEfficiency realistically varies from 0.8 (all weak nodes) to 1.0 (all perfect nodes)
+    const normalizedEfficiency = (avgEndNodeEfficiency - 0.8) / (1.0 - 0.8); // Maps 0.8 -> 0, 1.0 -> 1
+    const aiEnergyEfficiency = 0.85 + (normalizedEfficiency * (0.92 - 0.85)); // Map to 85-92% range
+    aiBased['Energy Efficiency'] = Math.max(0.85, Math.min(0.92, aiEnergyEfficiency));
+    traditional['Energy Efficiency'] = aiBased['Energy Efficiency'] - 0.05;
 
     // 3. Scalability & Delay (affected by node count)
     const scaleFactor = 1 + (endNodes.length / 150);
@@ -181,12 +185,25 @@ class NetworkAnalysisService {
     // Final cleanup: Clamp percentage-based values and round numbers
     Object.keys(aiBased).forEach(key => {
         const paramKey = key as keyof SimulationParameters;
-        // FIX: Use `key` (string) in `includes` to match string array type, not `paramKey` (string | number).
-        if (['Packet Delivery Ratio', 'Energy Efficiency', 'Scalability Index', 'Robustness Index', 'Adaptability Rate'].includes(key)) {
+        
+        if (key === 'Packet Delivery Ratio') {
+            // After all modifiers, the value could be e.g. 0.7 to 1.1. Let's normalize this variation.
+            const normalize = (val: number) => (val - 0.7) / (1.1 - 0.7); // Map 0.7 -> 0, 1.1 -> 1
+            const normalizedAI = normalize(aiBased[paramKey]);
+            
+            // Map normalized value to the user's desired 85-92% range
+            const aiPdr = 0.85 + (normalizedAI * (0.92 - 0.85));
+            aiBased[paramKey] = Math.max(0.85, Math.min(0.92, aiPdr)); // Firm clamp
+
+            // Traditional is 5 percentage points lower
+            traditional[paramKey] = aiBased[paramKey] - 0.05;
+        }
+        else if (['Energy Efficiency', 'Scalability Index', 'Robustness Index', 'Adaptability Rate'].includes(key)) {
+             // General clamping for other percentage metrics. Energy Efficiency is already handled.
              aiBased[paramKey] = Math.min(0.99, aiBased[paramKey]);
              traditional[paramKey] = Math.min(0.95, traditional[paramKey]);
         }
-        // FIX: Use `key` (string) in `includes` to match string array type, not `paramKey` (string | number).
+        
         if (['End-to-end Delay (ms)', 'Energy Consumption (J)', 'Network Lifetime (days)', 'Computational Efficiency (ops/J)'].includes(key)) {
             aiBased[paramKey] = Math.round(aiBased[paramKey]);
             traditional[paramKey] = Math.round(traditional[paramKey]);

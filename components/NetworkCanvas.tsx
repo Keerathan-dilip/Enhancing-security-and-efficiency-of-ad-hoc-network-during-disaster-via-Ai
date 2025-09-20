@@ -19,6 +19,7 @@ interface NetworkCanvasProps {
   animatedPackets: AnimatedPacket[];
   isolatedMaliciousNodeIds: string[];
   droppedPacketEvents: { id: string, x: number, y: number }[];
+  weakNodeIds: string[];
 }
 
 const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
@@ -38,6 +39,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   animatedPackets,
   isolatedMaliciousNodeIds,
   droppedPacketEvents,
+  weakNodeIds,
 }, ref) => {
   const [draggingNode, setDraggingNode] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
@@ -321,6 +323,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
         const isSelected = selectedNodeId === node.id && !isConnectionMode && !isPacketSimulationMode;
         const isConnSource = isConnecting === node.id;
         const isSimSource = packetSimSourceNode === node.id;
+        const isWeak = weakNodeIds.includes(node.id);
         return (
             <div
             key={node.id}
@@ -339,6 +342,9 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
              {node.isMalicious && (
                 <div className="absolute inset-0 rounded-full bg-red-500/50 animate-pulse"></div>
               )}
+             {isWeak && !node.isMalicious && (
+                <div className="absolute -inset-1 rounded-full border-2 border-orange-500 animate-pulse" title="Low Energy Efficiency"></div>
+             )}
             <NodeIcon type={node.type} />
             <span className="absolute text-white text-xs font-bold pointer-events-none" style={{ textShadow: '0 0 3px black' }}>
                 {index + 1}
