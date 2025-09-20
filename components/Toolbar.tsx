@@ -38,6 +38,7 @@ const Tool: React.FC<{ type: NetworkComponentType, onDragStart: (e: React.DragEv
 const TOPOLOGY_INFO: Record<NetworkTopology, string> = {
   cluster: 'Groups of nodes. Efficient for scalability. (e.g., ZRP, LEACH)',
   mesh: 'Highly connected nodes. Robust and reliable. (e.g., AODV, DSR)',
+  'cluster-mesh': 'Combines clusters for scalability with mesh connections within clusters for robustness.',
   ring: 'Nodes in a loop. Orderly but single point of failure. (e.g., Token Ring)',
   bus: 'Nodes on a shared line. Simple but can have collisions. (e.g., CSMA/CD)',
   grid: 'Nodes in a uniform grid layout. Structured and predictable.',
@@ -119,6 +120,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 >
                     <option value="cluster">Cluster</option>
                     <option value="mesh">Mesh</option>
+                    <option value="cluster-mesh">Cluster Mesh</option>
                     <option value="star">Star</option>
                     <option value="ring">Ring</option>
                     <option value="bus">Bus</option>

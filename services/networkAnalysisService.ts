@@ -61,12 +61,24 @@ class NetworkAnalysisService {
       return 'Ring Topology';
     }
 
-    // Check for Mesh: highly interconnected (average degree > 3)
     const avgDegree = nodeDegrees.reduce((a, b) => a + b, 0) / nodes.length;
-    if (avgDegree > 3) {
+
+    // Check for dense Mesh
+    if (avgDegree > 4) {
       return 'Mesh Topology';
     }
 
+    // Check for Cluster Mesh
+    const highDegreeNodes = nodeDegrees.filter(d => d > 5).length;
+    if (highDegreeNodes > 1 && highDegreeNodes < nodes.length / 4 && avgDegree > 2.5) {
+      return 'Cluster Mesh Topology';
+    }
+
+    // Check for standard Mesh
+    if (avgDegree > 3) {
+      return 'Mesh Topology';
+    }
+    
     return 'Cluster / Hybrid Topology';
   }
 
@@ -138,7 +150,7 @@ class NetworkAnalysisService {
     // 5. Topology-specific realism adjustment
     const lowerIsBetterKeys: (keyof SimulationParameters)[] = ['End-to-end Delay (ms)', 'Energy Consumption (J)'];
 
-    if (topology.includes('Mesh') || topology.includes('Cluster')) {
+    if (topology.includes('Mesh') || topology.includes('Cluster') || topology.includes('Cluster Mesh')) {
        Object.keys(aiBased).forEach(key => {
            const paramKey = key as keyof SimulationParameters;
            if (lowerIsBetterKeys.includes(paramKey)) {

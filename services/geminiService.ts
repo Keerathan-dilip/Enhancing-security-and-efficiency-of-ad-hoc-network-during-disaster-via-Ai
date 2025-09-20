@@ -120,6 +120,10 @@ Mechanism: A special data packet called a "token" circulates around the ring. A 
             return `Definition: A mesh topology is a highly reliable setup where nodes are interconnected with many redundant paths.
 Protocols: Common ad hoc protocols include **AODV** (Ad hoc On-Demand Distance Vector), **DSR** (Dynamic Source Routing), and **OLSR** (Optimized Link State Routing).
 Mechanism: Nodes act as routers for each other to forward data. When a node wants to send a packet, protocols like **AODV** discover a route by broadcasting a request. Intermediate nodes relay this request until it reaches the destination, establishing a path. This allows the network to be self-healing and adapt to node failures or movement.`;
+        case 'cluster mesh topology':
+            return `Definition: A hybrid topology that combines features of cluster and mesh networks. Nodes are organized into clusters, and within each cluster, nodes are highly interconnected in a mesh-like fashion.
+Protocols: This topology benefits from hybrid protocols like **ZRP** (Zone Routing Protocol). Intra-cluster routing can use proactive protocols (like **OLSR**), while inter-cluster routing can use reactive protocols (like **AODV**).
+Mechanism: Cluster-heads manage their respective clusters and form a backbone for inter-cluster communication. Within a cluster, the mesh structure provides robust, redundant paths, making it resilient to node failure. This approach offers both the scalability of a clustered network and the reliability of a mesh network.`;
         default:
             return `Definition: This is a custom or hybrid network configuration, often forming dynamic clusters. It combines elements of different topologies to suit specific needs.
 Protocols: Hierarchical or hybrid protocols like **ZRP** (Zone Routing Protocol) and **LEACH** (Low-Energy Adaptive Clustering Hierarchy) are common.

@@ -10,7 +10,7 @@ export enum NetworkComponentType {
   BASE_STATION = 'BASE_STATION',
 }
 
-export type NetworkTopology = 'random' | 'grid' | 'cluster' | 'mesh' | 'ring' | 'bus' | 'star';
+export type NetworkTopology = 'random' | 'grid' | 'cluster' | 'mesh' | 'cluster-mesh' | 'ring' | 'bus' | 'star';
 
 export interface Node {
   id: string;

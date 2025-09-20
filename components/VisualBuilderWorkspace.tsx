@@ -527,6 +527,66 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             newConnections.push({ id: `${routers[i].id}-${routers[i+1].id}-${Date.now()}`, from: routers[i].id, to: routers[i+1].id });
         }
 
+    } else if (topology === 'cluster-mesh') {
+        const numClusters = Math.max(2, Math.ceil(count / 30));
+        let nodesPlaced = 0;
+        const clusterHubs: Node[] = [];
+        const allClusterNodes: Node[][] = [];
+
+        const numEndNodesToPlace = count - (includeRouters ? Math.min(numClusters, numRouters) : 0);
+
+        for (let c = 0; c < numClusters; c++) {
+            const clusterCenterX = (Math.random() * 0.6 + 0.2) * canvasWidth;
+            const clusterCenterY = (Math.random() * 0.6 + 0.2) * canvasHeight;
+            const clusterRadius = Math.min(canvasWidth, canvasHeight) / (numClusters * 1.8);
+            
+            const nodesInThisCluster: Node[] = [];
+
+            if (includeRouters && clusterHubs.length < numRouters) {
+                const clusterHub = createNode(count + c, clusterCenterX, clusterCenterY, NetworkComponentType.ROUTER);
+                newNodes.push(clusterHub);
+                clusterHubs.push(clusterHub);
+                nodesInThisCluster.push(clusterHub);
+            }
+            
+            const nodesForThisCluster = Math.ceil(numEndNodesToPlace / numClusters);
+            for (let i = 0; i < nodesForThisCluster && nodesPlaced < numEndNodesToPlace; i++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const radius = Math.random() * clusterRadius;
+                const node = createNode(nodesPlaced, clusterCenterX + Math.cos(angle) * radius, clusterCenterY + Math.sin(angle) * radius);
+                newNodes.push(node);
+                nodesInThisCluster.push(node);
+                nodesPlaced++;
+            }
+            allClusterNodes.push(nodesInThisCluster);
+        }
+
+        // Create intra-cluster mesh connections
+        const K_NEAREST_IN_CLUSTER = 3;
+        allClusterNodes.forEach(cluster => {
+            if(cluster.length < 2) return;
+            cluster.forEach(sourceNode => {
+                const distances = cluster
+                    .filter(n => n.id !== sourceNode.id)
+                    .map(targetNode => ({ id: targetNode.id, dist: Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y) }))
+                    .sort((a, b) => a.dist - b.dist);
+                
+                for (let k = 0; k < Math.min(K_NEAREST_IN_CLUSTER, distances.length); k++) {
+                    const targetNodeId = distances[k].id;
+                    const exists = newConnections.some(c => (c.from === sourceNode.id && c.to === targetNodeId) || (c.from === targetNodeId && c.to === sourceNode.id));
+                    if (!exists) {
+                        newConnections.push({ id: `${sourceNode.id}-${targetNodeId}-${Date.now()}`, from: sourceNode.id, to: targetNodeId });
+                    }
+                }
+            });
+        });
+
+        // Connect cluster hubs
+        for(let i = 0; i < clusterHubs.length; i++) {
+            for (let j = i + 1; j < clusterHubs.length; j++) {
+                newConnections.push({ id: `${clusterHubs[i].id}-${clusterHubs[j].id}-${Date.now()}`, from: clusterHubs[i].id, to: clusterHubs[j].id });
+            }
+        }
     } else if (topology === 'ring' || topology === 'bus') {
         const centerX = canvasWidth / 2 + padding / 2;
         const centerY = canvasHeight / 2 + padding / 2;
