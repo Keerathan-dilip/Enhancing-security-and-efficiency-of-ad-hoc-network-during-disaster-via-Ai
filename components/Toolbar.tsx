@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { NetworkComponentType, NetworkTopology } from '../types';
 import { NodeIcon } from './NodeIcon';
 
@@ -15,6 +15,8 @@ interface ToolbarProps {
   onDownloadReport: () => void;
   analysisPerformed: boolean;
   isDownloadingReport: boolean;
+  onSaveNetwork: () => void;
+  onLoadNetwork: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 const Tool: React.FC<{ type: NetworkComponentType, onDragStart: (e: React.DragEvent, type: NetworkComponentType) => void }> = ({ type, onDragStart }) => {
@@ -57,12 +59,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
     onDownloadReport,
     analysisPerformed,
     isDownloadingReport,
+    onSaveNetwork,
+    onLoadNetwork
 }) => {
   const [generateCount, setGenerateCount] = useState(50);
   const [topology, setTopology] = useState<NetworkTopology>('cluster');
   const [kNeighbors, setKNeighbors] = useState(2);
   const [includeRouters, setIncludeRouters] = useState(true);
   const [includeSwitches, setIncludeSwitches] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
     
   const handleDragStart = (e: React.DragEvent, type: NetworkComponentType) => {
     e.dataTransfer.setData('application/reactflow', type);
@@ -194,6 +199,35 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 </button>
             </div>
             <p className="text-xs text-gray-400 mt-1">Replaces all existing connections.</p>
+        </div>
+      </div>
+
+       <div className="pt-4 border-t border-cyan-500/20">
+        <h3 className="text-lg font-bold text-cyan-300 mb-2">Network Management</h3>
+        <div className="space-y-3">
+             <button
+                onClick={onSaveNetwork}
+                disabled={nodeCount === 0}
+                className="w-full px-5 py-2.5 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-all duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
+             >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" /></svg>
+                <span>Save Network</span>
+             </button>
+             <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full px-5 py-2.5 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-all duration-300 flex items-center justify-center space-x-2"
+             >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
+                <span>Load Network</span>
+             </button>
+             <input
+                type="file"
+                ref={fileInputRef}
+                onChange={onLoadNetwork}
+                className="hidden"
+                accept=".json,application/json"
+                aria-hidden="true"
+             />
         </div>
       </div>
 

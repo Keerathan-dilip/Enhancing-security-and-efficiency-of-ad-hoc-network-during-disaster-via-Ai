@@ -134,6 +134,31 @@ class NetworkAnalysisService {
         // AI model is resilient
         aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index'] * 1.05);
     }
+    
+    // 5. Topology-specific realism adjustment
+    const lowerIsBetterKeys: (keyof SimulationParameters)[] = ['End-to-end Delay (ms)', 'Energy Consumption (J)'];
+
+    if (topology.includes('Mesh') || topology.includes('Cluster')) {
+       Object.keys(aiBased).forEach(key => {
+           const paramKey = key as keyof SimulationParameters;
+           if (lowerIsBetterKeys.includes(paramKey)) {
+               aiBased[paramKey] = traditional[paramKey] * 0.95; // 5% better (lower value)
+           } else {
+               aiBased[paramKey] = traditional[paramKey] * 1.05; // 5% better (higher value)
+           }
+       });
+
+       // Ensure values are within reasonable bounds and correct format after adjustment
+       aiBased['Packet Delivery Ratio'] = Math.min(0.99, aiBased['Packet Delivery Ratio']);
+       aiBased['Energy Efficiency'] = Math.min(0.99, aiBased['Energy Efficiency']);
+       aiBased['Scalability Index'] = Math.min(0.99, aiBased['Scalability Index']);
+       aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index']);
+       aiBased['Adaptability Rate'] = Math.min(0.99, aiBased['Adaptability Rate']);
+
+       aiBased['End-to-end Delay (ms)'] = Math.round(aiBased['End-to-end Delay (ms)']);
+       aiBased['Energy Consumption (J)'] = Math.round(aiBased['Energy Consumption (J)']);
+       aiBased['Network Lifetime (days)'] = Math.round(aiBased['Network Lifetime (days)']);
+    }
 
 
     return {

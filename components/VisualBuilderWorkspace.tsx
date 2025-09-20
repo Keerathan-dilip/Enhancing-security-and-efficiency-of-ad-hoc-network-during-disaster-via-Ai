@@ -16,6 +16,72 @@ const PACKET_ANIMATION_DURATION_AI = 4000; // ms
 const PACKET_ANIMATION_DURATION_TRADITIONAL = 5500; // ms
 const PACKET_SIMULATION_DURATION = 8000; // 8s
 
+const SaveNetworkModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    initialContent: string;
+    onSave: (fileName: string, content: string) => void;
+}> = ({ isOpen, onClose, initialContent, onSave }) => {
+    const [fileName, setFileName] = useState('network-config.json');
+    const [content, setContent] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setContent(initialContent);
+            setFileName('network-config.json');
+        }
+    }, [isOpen, initialContent]);
+
+    if (!isOpen) return null;
+
+    const handleSaveClick = () => {
+        onSave(fileName, content);
+    };
+
+    const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (e.target === e.currentTarget) {
+            onClose();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fadeIn" onClick={handleContainerClick}>
+            <div className="bg-gray-800 rounded-lg shadow-xl border border-cyan-500/20 w-full max-w-2xl flex flex-col max-h-[90vh]">
+                <div className="p-4 border-b border-cyan-500/20 flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-cyan-300">Save Network Configuration</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+                <div className="p-4 space-y-4 overflow-y-auto">
+                    <div>
+                        <label htmlFor="save-filename" className="block text-sm font-medium text-gray-300 mb-1">File Name</label>
+                        <input
+                            id="save-filename"
+                            type="text"
+                            value={fileName}
+                            onChange={(e) => setFileName(e.target.value)}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="save-content" className="block text-sm font-medium text-gray-300 mb-1">Network Data (JSON) - Editable</label>
+                        <textarea
+                            id="save-content"
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            className="w-full h-64 bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-white font-mono text-sm resize-y focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                            spellCheck="false"
+                        />
+                    </div>
+                </div>
+                <div className="p-4 border-t border-cyan-500/20 flex justify-end items-center space-x-3 bg-gray-800/50 rounded-b-lg">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-500 transition-colors">Cancel</button>
+                    <button onClick={handleSaveClick} className="px-4 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition-colors">Save to File</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface VisualBuilderWorkspaceProps {
     nodes: Node[];
     setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
@@ -70,6 +136,8 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   // State for new features
   const [isolatedMaliciousNodeIds, setIsolatedMaliciousNodeIds] = useState<string[]>([]);
   const [droppedPacketEvents, setDroppedPacketEvents] = useState<{ id: string, x: number, y: number }[]>([]);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [networkDataToSave, setNetworkDataToSave] = useState('');
 
 
   const clearAnalysis = useCallback(() => {
@@ -831,114 +899,217 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         clearAnalysis();
     }
   }, [nodes, connections, setNodes, setConnections, clearAnalysis]);
+  
+  const handleSaveNetwork = useCallback(() => {
+    if (nodes.length === 0) {
+        return; // Button is disabled, but this is a safeguard
+    }
+    const dataToSave = {
+        nodes,
+        connections,
+    };
+    const jsonString = JSON.stringify(dataToSave, null, 2);
+    setNetworkDataToSave(jsonString);
+    setIsSaveModalOpen(true);
+  }, [nodes, connections]);
+
+  const performSave = useCallback((fileName: string, content: string) => {
+    let parsedContent;
+    try {
+        parsedContent = JSON.parse(content);
+    } catch (error) {
+        alert("The content is not valid JSON. Please correct it before saving.");
+        return;
+    }
+
+    if (!parsedContent.nodes || !parsedContent.connections || !Array.isArray(parsedContent.nodes) || !Array.isArray(parsedContent.connections)) {
+        alert("Invalid network structure. The JSON must contain 'nodes' and 'connections' arrays.");
+        return;
+    }
+
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    setIsSaveModalOpen(false);
+  }, []);
+
+  const handleLoadNetwork = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.json')) {
+      alert('Invalid file type. Please select a valid network configuration file (.json).');
+      if (event.target) {
+        event.target.value = '';
+      }
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result;
+        if (typeof text !== 'string') {
+          throw new Error("Failed to read file content.");
+        }
+        const data = JSON.parse(text);
+
+        // Basic validation
+        if (Array.isArray(data.nodes) && Array.isArray(data.connections)) {
+          clearAnalysis();
+          setNodes(data.nodes);
+          setConnections(data.connections);
+          alert(`Successfully loaded network from ${file.name}`);
+        } else {
+          throw new Error("Invalid network file format. 'nodes' and 'connections' arrays are required.");
+        }
+      } catch (error) {
+        console.error("Failed to load network file:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        alert(`Error loading file: ${file.name}.\n\nPlease ensure the file is a valid JSON network configuration.\n\nDetails: ${errorMessage}`);
+      } finally {
+        // Reset file input value to allow loading the same file again
+        if (event.target) {
+          event.target.value = '';
+        }
+      }
+    };
+    reader.onerror = () => {
+      alert(`Failed to read the file: ${reader.error}`);
+      if (event.target) {
+        event.target.value = '';
+      }
+    };
+    reader.readAsText(file);
+
+  }, [setNodes, setConnections, clearAnalysis]);
+
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
   const selectedConnection = connections.find(c => c.id === selectedConnectionId) || null;
   const weakNodes = nodes.filter(n => n.type === NetworkComponentType.NODE && n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD);
 
   return (
-    <div className="h-full flex flex-col gap-4 animate-fadeIn">
-      <div className="flex-grow flex flex-col lg:flex-row gap-4">
-        <div className="w-full lg:w-1/4 xl:w-1/5 flex flex-col gap-4">
-            <Toolbar 
-                onAnalyze={handleAnalyze} 
-                isAnalyzing={isAnalyzing} 
-                nodeCount={nodes.length}
-                onGenerateNetwork={generateNetwork}
-                isConnectionMode={isConnectionMode}
-                onToggleConnectionMode={toggleConnectionMode}
-                isPacketSimulationMode={isPacketSimulationMode}
-                onTogglePacketSimulationMode={togglePacketSimulationMode}
-                onAutoConnect={handleAutoConnect}
-                onDownloadReport={handleDownloadFullReport}
-                analysisPerformed={!!analysisResult}
-                isDownloadingReport={isDownloadingReport}
-            />
-            {isPacketSimulationMode && (
-                <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 animate-fadeIn">
-                    <h3 className="text-lg font-bold text-cyan-300 mb-2">Packet Message</h3>
-                    <p className="text-xs text-gray-400 mb-2">Edit the message for the AI (blue) and Traditional (orange) packets.</p>
-                    <textarea 
-                        value={packetMessage}
-                        onChange={(e) => setPacketMessage(e.target.value)}
-                        className="w-full h-28 bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white text-sm resize-none focus:ring-2 focus:ring-cyan-500 focus:outline-none"
-                        aria-label="Packet message editor"
-                    />
-                </div>
-            )}
-            {selectedNode && !isConnectionMode && !isPacketSimulationMode && (
-                <PropertiesPanel 
-                    node={selectedNode} 
-                    onUpdate={updateNode} 
-                    onRouterAutoConnect={handleRouterAutoConnect}
-                    onDeleteNode={deleteSelectedNode}
-                />
-            )}
-            {selectedConnection && !isConnectionMode && !isPacketSimulationMode && <ConnectionPanel connection={selectedConnection} nodes={nodes} onDelete={deleteSelectedConnection} />}
-            
-            {deliveredPackets.length > 0 && (
-              <PacketDeliveryLog
-                packets={deliveredPackets}
-                onClear={() => setDeliveredPackets([])}
+    <>
+      <div className="h-full flex flex-col gap-4 animate-fadeIn">
+        <div className="flex-grow flex flex-col lg:flex-row gap-4">
+          <div className="w-full lg:w-1/4 xl:w-1/5 flex flex-col gap-4">
+              <Toolbar 
+                  onAnalyze={handleAnalyze} 
+                  isAnalyzing={isAnalyzing} 
+                  nodeCount={nodes.length}
+                  onGenerateNetwork={generateNetwork}
+                  isConnectionMode={isConnectionMode}
+                  onToggleConnectionMode={toggleConnectionMode}
+                  isPacketSimulationMode={isPacketSimulationMode}
+                  onTogglePacketSimulationMode={togglePacketSimulationMode}
+                  onAutoConnect={handleAutoConnect}
+                  onDownloadReport={handleDownloadFullReport}
+                  analysisPerformed={!!analysisResult}
+                  isDownloadingReport={isDownloadingReport}
+                  onSaveNetwork={handleSaveNetwork}
+                  onLoadNetwork={handleLoadNetwork}
               />
-            )}
+              {isPacketSimulationMode && (
+                  <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 animate-fadeIn">
+                      <h3 className="text-lg font-bold text-cyan-300 mb-2">Packet Message</h3>
+                      <p className="text-xs text-gray-400 mb-2">Edit the message for the AI (blue) and Traditional (orange) packets.</p>
+                      <textarea 
+                          value={packetMessage}
+                          onChange={(e) => setPacketMessage(e.target.value)}
+                          className="w-full h-28 bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white text-sm resize-none focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                          aria-label="Packet message editor"
+                      />
+                  </div>
+              )}
+              {selectedNode && !isConnectionMode && !isPacketSimulationMode && (
+                  <PropertiesPanel 
+                      node={selectedNode} 
+                      onUpdate={updateNode} 
+                      onRouterAutoConnect={handleRouterAutoConnect}
+                      onDeleteNode={deleteSelectedNode}
+                  />
+              )}
+              {selectedConnection && !isConnectionMode && !isPacketSimulationMode && <ConnectionPanel connection={selectedConnection} nodes={nodes} onDelete={deleteSelectedConnection} />}
+              
+              {deliveredPackets.length > 0 && (
+                <PacketDeliveryLog
+                  packets={deliveredPackets}
+                  onClear={() => setDeliveredPackets([])}
+                />
+              )}
 
-            <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20">
-                <div ref={analysisDownloadRef}>
-                    {analysisResult && (
-                        <div className="p-4">
-                            <div className="flex justify-between items-center mb-2">
-                               <h3 className="text-lg font-bold text-cyan-300">Topology Analysis</h3>
-                            </div>
-                            <p className="mb-2 text-cyan-100">Identified Topology: <strong className="text-white">{analysisResult.topology}</strong></p>
-                            <FormattedDescription text={analysisResult.description} />
+              <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20">
+                  <div ref={analysisDownloadRef}>
+                      {analysisResult && (
+                          <div className="p-4">
+                              <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-lg font-bold text-cyan-300">Topology Analysis</h3>
+                              </div>
+                              <p className="mb-2 text-cyan-100">Identified Topology: <strong className="text-white">{analysisResult.topology}</strong></p>
+                              <FormattedDescription text={analysisResult.description} />
+                          </div>
+                      )}
+                      {(isAnalyzing || insights) && (
+                        <div className={`${analysisResult ? 'border-t border-cyan-500/20' : ''}`}>
+                          <AIInsightsPanel isLoading={isGeneratingInsights} insights={insights} />
                         </div>
-                    )}
-                    {(isAnalyzing || insights) && (
-                      <div className={`${analysisResult ? 'border-t border-cyan-500/20' : ''}`}>
-                        <AIInsightsPanel isLoading={isGeneratingInsights} insights={insights} />
-                      </div>
-                    )}
-                </div>
-            </div>
+                      )}
+                  </div>
+              </div>
 
+          </div>
+          <div className="w-full lg:w-3/4 xl:w-4/5">
+              <NetworkCanvas
+                  ref={canvasRef}
+                  nodes={nodes}
+                  setNodes={setNodes}
+                  connections={connections}
+                  setConnections={setConnections}
+                  selectedNodeId={selectedNodeId}
+                  setSelectedNodeId={setSelectedNodeId}
+                  selectedConnectionId={selectedConnectionId}
+                  setSelectedConnectionId={setSelectedConnectionId}
+                  onAddComponent={addNode}
+                  isConnectionMode={isConnectionMode}
+                  isPacketSimulationMode={isPacketSimulationMode}
+                  onNodeClickForSimulation={handleNodeClickForSimulation}
+                  packetSimSourceNode={packetSimSourceNode}
+                  animatedPackets={animatedPackets}
+                  isolatedMaliciousNodeIds={isolatedMaliciousNodeIds}
+                  droppedPacketEvents={droppedPacketEvents}
+              />
+          </div>
         </div>
-        <div className="w-full lg:w-3/4 xl:w-4/5">
-            <NetworkCanvas
-                ref={canvasRef}
+        {simulationParams && (
+          <div className="mt-4">
+              <ReportDashboard
+                ref={reportDashboardRef}
+                simulationData={simulationParams}
                 nodes={nodes}
-                setNodes={setNodes}
-                connections={connections}
-                setConnections={setConnections}
-                selectedNodeId={selectedNodeId}
-                setSelectedNodeId={setSelectedNodeId}
-                selectedConnectionId={selectedConnectionId}
-                setSelectedConnectionId={setSelectedConnectionId}
-                onAddComponent={addNode}
-                isConnectionMode={isConnectionMode}
-                isPacketSimulationMode={isPacketSimulationMode}
-                onNodeClickForSimulation={handleNodeClickForSimulation}
-                packetSimSourceNode={packetSimSourceNode}
-                animatedPackets={animatedPackets}
-                isolatedMaliciousNodeIds={isolatedMaliciousNodeIds}
-                droppedPacketEvents={droppedPacketEvents}
-            />
-        </div>
+                weakNodes={weakNodes}
+                onReconstruct={handleReconstruct}
+                onUpdateNodeIp={updateNodeIp}
+                isUpdating={isReportUpdating}
+              />
+          </div>
+          )}
       </div>
-       {simulationParams && (
-        <div className="mt-4">
-            <ReportDashboard
-              ref={reportDashboardRef}
-              simulationData={simulationParams}
-              nodes={nodes}
-              weakNodes={weakNodes}
-              onReconstruct={handleReconstruct}
-              onUpdateNodeIp={updateNodeIp}
-              isUpdating={isReportUpdating}
-            />
-        </div>
-        )}
-    </div>
+      <SaveNetworkModal
+          isOpen={isSaveModalOpen}
+          onClose={() => setIsSaveModalOpen(false)}
+          initialContent={networkDataToSave}
+          onSave={performSave}
+      />
+    </>
   );
 };
 
