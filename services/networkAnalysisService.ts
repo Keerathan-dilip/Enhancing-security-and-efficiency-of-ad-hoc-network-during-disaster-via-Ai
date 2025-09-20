@@ -112,29 +112,30 @@ class NetworkAnalysisService {
     // --- Apply modifiers ---
     // 1. Performance boost from infrastructure (Routers, Base Stations)
     const infraBoost = 1.0 + (routers.length * 0.02) + (baseStations.length * 0.05);
-    aiBased['Packet Delivery Ratio'] = Math.min(0.99, aiBased['Packet Delivery Ratio'] * infraBoost);
-    traditional['Packet Delivery Ratio'] = Math.min(0.95, traditional['Packet Delivery Ratio'] * infraBoost * 0.95);
-    aiBased['Robustness Index'] = Math.min(0.98, aiBased['Robustness Index'] * infraBoost);
-    aiBased['End-to-end Delay (ms)'] = Math.round(aiBased['End-to-end Delay (ms)'] / Math.sqrt(infraBoost)); // Better infra reduces delay
+    aiBased['Packet Delivery Ratio'] *= infraBoost;
+    traditional['Packet Delivery Ratio'] *= infraBoost * 0.95;
+    aiBased['Robustness Index'] *= infraBoost;
+    aiBased['End-to-end Delay (ms)'] /= Math.sqrt(infraBoost); // Better infra reduces delay
     
     // 2. Energy & Lifetime (based on actual component consumption and end-node health)
     const totalBaseConsumption = 500; // From constants.ts for 50 nodes
     const consumptionFactor = totalEnergyConsumptionRate / totalBaseConsumption;
 
-    aiBased['Energy Consumption (J)'] = Math.round(aiBased['Energy Consumption (J)'] * consumptionFactor);
-    traditional['Energy Consumption (J)'] = Math.round(traditional['Energy Consumption (J)'] * consumptionFactor * 1.15);
+    aiBased['Energy Consumption (J)'] *= consumptionFactor;
+    traditional['Energy Consumption (J)'] *= consumptionFactor * 1.15;
 
-    const lifetimeFactor = avgEndNodeEfficiency > 0 ? (avgEndNodeEfficiency / (consumptionFactor * 0.5)) : 0;
-    aiBased['Network Lifetime (days)'] = Math.round(aiBased['Network Lifetime (days)'] * lifetimeFactor);
-    traditional['Network Lifetime (days)'] = Math.round(traditional['Network Lifetime (days)'] * lifetimeFactor * 0.85);
+    // Enhanced lifetime factor for more noticeable change after removing weak nodes
+    const lifetimeFactor = avgEndNodeEfficiency > 0 ? ((avgEndNodeEfficiency ** 1.5) / (consumptionFactor * 0.45)) : 0;
+    aiBased['Network Lifetime (days)'] *= lifetimeFactor;
+    traditional['Network Lifetime (days)'] *= lifetimeFactor * 0.85;
     
     aiBased['Energy Efficiency'] = Math.min(0.98, avgEndNodeEfficiency);
     traditional['Energy Efficiency'] = Math.min(0.94, avgEndNodeEfficiency * 0.95);
 
     // 3. Scalability & Delay (affected by node count)
     const scaleFactor = 1 + (endNodes.length / 150);
-    aiBased['End-to-end Delay (ms)'] = Math.round(aiBased['End-to-end Delay (ms)'] * scaleFactor);
-    traditional['End-to-end Delay (ms)'] = Math.round(traditional['End-to-end Delay (ms)'] * scaleFactor * 1.1);
+    aiBased['End-to-end Delay (ms)'] *= scaleFactor;
+    traditional['End-to-end Delay (ms)'] *= scaleFactor * 1.1;
 
     // 4. Malicious Node Penalties
     if (maliciousNodeIds.length > 0) {
@@ -147,31 +148,50 @@ class NetworkAnalysisService {
         aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index'] * 1.05);
     }
     
-    // 5. Topology-specific realism adjustment
+    // 5. Topology-specific performance scaling based on user-defined hierarchy
+    let topologyModifier = 1.0;
+    if (topology.includes('Cluster Mesh')) {
+        topologyModifier = 1.15; // Primary: Best performance
+    } else if (topology.includes('Mesh')) {
+        topologyModifier = 1.08; // Secondary: Good performance
+    } else if (topology.includes('Cluster')) {
+        topologyModifier = 1.0;   // Tertiary: Baseline performance
+    } else if (topology.includes('Grid') || topology.includes('Random')) {
+        topologyModifier = 0.98;
+    } else { // Star, Ring, Bus - less efficient for ad hoc
+        topologyModifier = 0.92;
+    }
+    
     const lowerIsBetterKeys: (keyof SimulationParameters)[] = ['End-to-end Delay (ms)', 'Energy Consumption (J)'];
 
-    if (topology.includes('Mesh') || topology.includes('Cluster') || topology.includes('Cluster Mesh')) {
-       Object.keys(aiBased).forEach(key => {
-           const paramKey = key as keyof SimulationParameters;
-           if (lowerIsBetterKeys.includes(paramKey)) {
-               aiBased[paramKey] = traditional[paramKey] * 0.95; // 5% better (lower value)
-           } else {
-               aiBased[paramKey] = traditional[paramKey] * 1.05; // 5% better (higher value)
-           }
-       });
+    Object.keys(aiBased).forEach(key => {
+        const paramKey = key as keyof SimulationParameters;
+        const aiTopologyModifier = topologyModifier;
+        const tradTopologyModifier = 1 + (topologyModifier - 1) * 0.7; // Traditional benefits less
 
-       // Ensure values are within reasonable bounds and correct format after adjustment
-       aiBased['Packet Delivery Ratio'] = Math.min(0.99, aiBased['Packet Delivery Ratio']);
-       aiBased['Energy Efficiency'] = Math.min(0.99, aiBased['Energy Efficiency']);
-       aiBased['Scalability Index'] = Math.min(0.99, aiBased['Scalability Index']);
-       aiBased['Robustness Index'] = Math.min(0.99, aiBased['Robustness Index']);
-       aiBased['Adaptability Rate'] = Math.min(0.99, aiBased['Adaptability Rate']);
+        if (lowerIsBetterKeys.includes(paramKey)) {
+            aiBased[paramKey] /= aiTopologyModifier;
+            traditional[paramKey] /= tradTopologyModifier;
+        } else {
+            aiBased[paramKey] *= aiTopologyModifier;
+            traditional[paramKey] *= tradTopologyModifier;
+        }
+    });
 
-       aiBased['End-to-end Delay (ms)'] = Math.round(aiBased['End-to-end Delay (ms)']);
-       aiBased['Energy Consumption (J)'] = Math.round(aiBased['Energy Consumption (J)']);
-       aiBased['Network Lifetime (days)'] = Math.round(aiBased['Network Lifetime (days)']);
-    }
-
+    // Final cleanup: Clamp percentage-based values and round numbers
+    Object.keys(aiBased).forEach(key => {
+        const paramKey = key as keyof SimulationParameters;
+        // FIX: Use `key` (string) in `includes` to match string array type, not `paramKey` (string | number).
+        if (['Packet Delivery Ratio', 'Energy Efficiency', 'Scalability Index', 'Robustness Index', 'Adaptability Rate'].includes(key)) {
+             aiBased[paramKey] = Math.min(0.99, aiBased[paramKey]);
+             traditional[paramKey] = Math.min(0.95, traditional[paramKey]);
+        }
+        // FIX: Use `key` (string) in `includes` to match string array type, not `paramKey` (string | number).
+        if (['End-to-end Delay (ms)', 'Energy Consumption (J)', 'Network Lifetime (days)', 'Computational Efficiency (ops/J)'].includes(key)) {
+            aiBased[paramKey] = Math.round(aiBased[paramKey]);
+            traditional[paramKey] = Math.round(traditional[paramKey]);
+        }
+    });
 
     return {
       'AI-Based': aiBased,
