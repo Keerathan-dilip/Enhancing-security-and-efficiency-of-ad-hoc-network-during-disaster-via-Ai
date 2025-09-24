@@ -17,6 +17,8 @@ export interface Node {
   type: NetworkComponentType;
   x: number;
   y: number;
+  vx?: number; // Velocity for mobility simulation
+  vy?: number; // Velocity for mobility simulation
   ipAddress: string;
   energyEfficiency: number; // Represents health/battery for mobile nodes
   energySpent: number; // Consumption rate
@@ -52,6 +54,7 @@ export interface DeliveredPacketInfo {
   message: string;
   path: string[];
   status: 'delivered' | 'dropped';
+  transmissionTime: number; // in milliseconds
 }
 
 export interface SimulationParameters {
@@ -65,4 +68,5 @@ export interface SimulationParameters {
   'Energy Efficiency': number;
   'Robustness Index': number;
   'Adaptability Rate': number;
+  'Throughput (Mbps)': number;
 }

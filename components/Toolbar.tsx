@@ -6,7 +6,7 @@ interface ToolbarProps {
   onAnalyze: () => void;
   isAnalyzing: boolean;
   nodeCount: number;
-  onGenerateNetwork: (count: number, topology: NetworkTopology, includeRouters: boolean, includeSwitches: boolean) => void;
+  onGenerateNetwork: (count: number, topology: NetworkTopology, includeRouters: boolean, includeSwitches: boolean, numClusterHeads: number) => void;
   isConnectionMode: boolean;
   onToggleConnectionMode: () => void;
   isPacketSimulationMode: boolean;
@@ -36,7 +36,7 @@ const Tool: React.FC<{ type: NetworkComponentType, onDragStart: (e: React.DragEv
 };
 
 const TOPOLOGY_INFO: Record<NetworkTopology, string> = {
-  cluster: 'Groups of nodes. Efficient for scalability. (e.g., ZRP, LEACH)',
+  cluster: 'Groups of nodes with central heads. Efficient for scalability. (e.g., ZRP, LEACH)',
   mesh: 'Highly connected nodes. Robust and reliable. (e.g., AODV, DSR)',
   'cluster-mesh': 'Combines clusters for scalability with mesh connections within clusters for robustness.',
   ring: 'Nodes in a loop. Orderly but single point of failure. (e.g., Token Ring)',
@@ -68,6 +68,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   const [kNeighbors, setKNeighbors] = useState(2);
   const [includeRouters, setIncludeRouters] = useState(true);
   const [includeSwitches, setIncludeSwitches] = useState(false);
+  const [numClusterHeads, setNumClusterHeads] = useState(3);
   const fileInputRef = useRef<HTMLInputElement>(null);
     
   const handleDragStart = (e: React.DragEvent, type: NetworkComponentType) => {
@@ -80,7 +81,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           alert('Maximum number of nodes is 450.');
           return;
       }
-      onGenerateNetwork(generateCount, topology, includeRouters, includeSwitches);
+      onGenerateNetwork(generateCount, topology, includeRouters, includeSwitches, numClusterHeads);
   }
 
   return (
@@ -129,10 +130,24 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 </select>
                 <p className="text-xs text-gray-400 mt-1 h-10">{TOPOLOGY_INFO[topology]}</p>
              </div>
+             {(topology === 'cluster' || topology === 'cluster-mesh') && (
+                <div className="animate-fadeIn">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Number of Cluster Heads</label>
+                    <input
+                        type="number"
+                        value={numClusterHeads}
+                        onChange={(e) => setNumClusterHeads(Math.max(1, parseInt(e.target.value, 10)))}
+                        min="1"
+                        max={generateCount > 1 ? generateCount - 1 : 1}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+                        aria-label="Number of cluster heads to generate"
+                    />
+                </div>
+             )}
              <div className="space-y-2">
                 <label className="flex items-center space-x-2 cursor-pointer">
                     <input type="checkbox" checked={includeRouters} onChange={e => setIncludeRouters(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
-                    <span className="text-sm text-gray-300">Include Routers</span>
+                    <span className="text-sm text-gray-300">Use Routers for Cluster Heads</span>
                 </label>
                  <label className="flex items-center space-x-2 cursor-pointer">
                     <input type="checkbox" checked={includeSwitches} onChange={e => setIncludeSwitches(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
@@ -155,7 +170,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 onClick={onToggleConnectionMode}
                 className={`w-full px-5 py-2.5 font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 ${
                     isConnectionMode 
-                        ? 'bg-yellow-500 text-gray-900 hover:bg-yellow-600' 
+                        ? 'bg-sky-400 text-white hover:bg-sky-500' 
                         : 'bg-cyan-500 text-white hover:bg-cyan-600'
                 }`}
             >
@@ -169,8 +184,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 disabled={nodeCount < 2}
                 className={`w-full px-5 py-2.5 font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed ${
                     isPacketSimulationMode 
-                        ? 'bg-yellow-500 text-gray-900 hover:bg-yellow-600' 
-                        : 'bg-teal-500 text-white hover:bg-teal-600'
+                        ? 'bg-sky-400 text-white hover:bg-sky-500' 
+                        : 'bg-cyan-600 text-white hover:bg-cyan-700'
                 }`}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
@@ -195,7 +210,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <button
                     onClick={() => onAutoConnect(kNeighbors)}
                     disabled={nodeCount < 2}
-                    className="flex-grow px-4 py-2 bg-purple-500 text-white font-bold rounded-lg hover:bg-purple-600 transition-all duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
+                    className="flex-grow px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-all duration-300 flex items-center justify-center space-x-2 disabled:bg-gray-500 disabled:cursor-not-allowed"
                 >
                     <span>Connect</span>
                 </button>
@@ -237,7 +252,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
          <button
             onClick={onAnalyze}
             disabled={isAnalyzing || nodeCount < 2}
-            className="w-full px-5 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            className="w-full px-5 py-3 bg-cyan-500 text-white font-bold rounded-lg hover:bg-cyan-600 transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
             {isAnalyzing ? (
                 <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

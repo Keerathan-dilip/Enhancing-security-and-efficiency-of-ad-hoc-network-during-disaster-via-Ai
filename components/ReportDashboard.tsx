@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState, useEffect } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell,
@@ -21,6 +21,14 @@ interface ReportDashboardProps {
 
 type ChartType = 'pie' | 'line' | 'stat' | 'progress' | 'bar';
 
+interface LiveDataPoint {
+    time: string;
+    aiPDR: number;
+    tradPDR: number;
+    aiThroughput: number;
+    tradThroughput: number;
+}
+
 const PARAMETER_CONFIG: {
     key: keyof SimulationParameters;
     higherIsBetter: boolean;
@@ -29,6 +37,7 @@ const PARAMETER_CONFIG: {
     chartType: ChartType;
 }[] = [
   { key: 'Packet Delivery Ratio', higherIsBetter: true, unit: '%', chartType: 'pie' },
+  { key: 'Throughput (Mbps)', higherIsBetter: true, unit: 'Mbps', chartType: 'bar' },
   { key: 'End-to-end Delay (ms)', higherIsBetter: false, displayName: 'Responsiveness', unit: '(Higher is better)', chartType: 'line' },
   { key: 'Energy Consumption (J)', higherIsBetter: false, displayName: 'Energy Conservation', unit: '(Higher is better)', chartType: 'line' },
   { key: 'Network Lifetime (days)', higherIsBetter: true, unit: 'days', chartType: 'stat' },
@@ -178,8 +187,55 @@ const UnifiedChart: React.FC<{ data: any; type: ChartType }> = ({ data, type }) 
     }
 };
 
+// FIX: Update domain type to allow string values like 'auto' for recharts domain prop.
+const LiveChart: React.FC<{ data: LiveDataPoint[]; title: string; unit: string; dataKeyAI: keyof LiveDataPoint; dataKeyTrad: keyof LiveDataPoint; domain: [number | string, number | string] }> =
+    ({ data, title, unit, dataKeyAI, dataKeyTrad, domain }) => {
+    return (
+        <div className="bg-gray-800/50 p-4 rounded-lg border border-cyan-500/10 shadow-lg h-full flex flex-col min-h-[320px]">
+            <h3 className="text-md font-semibold text-center text-cyan-200">{title}</h3>
+            <p className="text-xs text-center text-gray-400 mb-2">{unit}</p>
+            <div className="flex-grow">
+                <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} />
+                        <YAxis stroke="#9ca3af" fontSize={12} domain={domain} />
+                        <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #38bdf8' }} />
+                        <Legend />
+                        <Line type="monotone" name="AI-Based" dataKey={dataKeyAI} stroke="#22d3ee" strokeWidth={2} dot={false} />
+                        <Line type="monotone" name="Traditional" dataKey={dataKeyTrad} stroke="#f97316" strokeWidth={2} dot={false} />
+                    </LineChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+};
+
 const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simulationData, nodes, weakNodes, onReconstruct, onUpdateNodeIp, isUpdating }, ref) => {
-  
+  const [liveChartData, setLiveChartData] = useState<LiveDataPoint[]>([]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+        const baseAiPDR = simulationData['AI-Based']['Packet Delivery Ratio'];
+        const baseTradPDR = simulationData['Traditional']['Packet Delivery Ratio'];
+        const baseAiThroughput = simulationData['AI-Based']['Throughput (Mbps)'];
+        const baseTradThroughput = simulationData['Traditional']['Throughput (Mbps)'];
+        
+        const newPoint: LiveDataPoint = {
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            aiPDR: baseAiPDR * (1 - (Math.random() - 0.5) * 0.02), // +/- 1% fluctuation
+            tradPDR: baseTradPDR * (1 - (Math.random() - 0.5) * 0.04), // +/- 2% fluctuation
+            aiThroughput: baseAiThroughput * (1 - (Math.random() - 0.5) * 0.05), // +/- 2.5% fluctuation
+            tradThroughput: baseTradThroughput * (1 - (Math.random() - 0.5) * 0.08) // +/- 4% fluctuation
+        };
+
+        setLiveChartData(prev => [...prev.slice(-29), newPoint]); // Keep last 30 data points
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [simulationData]);
+
+
   const processedData = PARAMETER_CONFIG.map(config => {
     const aiValue = simulationData['AI-Based'][config.key as keyof SimulationParameters];
     const traditionalValue = simulationData['Traditional'][config.key as keyof SimulationParameters];
@@ -237,6 +293,30 @@ const ReportDashboard = forwardRef<HTMLDivElement, ReportDashboardProps>(({ simu
                 ))}
             </div>
         </div>
+
+        {liveChartData.length > 0 && (
+            <div className="mt-8">
+                <h2 className="text-2xl font-semibold text-cyan-300 mb-4">Live Performance Monitoring</h2>
+                <div className="p-4 bg-gray-900 rounded-lg grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <LiveChart
+                        data={liveChartData}
+                        title="Packet Delivery Ratio"
+                        unit="%"
+                        dataKeyAI="aiPDR"
+                        dataKeyTrad="tradPDR"
+                        domain={[0.6, 1.0]}
+                    />
+                    <LiveChart
+                        data={liveChartData}
+                        title="Throughput"
+                        unit="Mbps"
+                        dataKeyAI="aiThroughput"
+                        dataKeyTrad="tradThroughput"
+                        domain={['auto', 'auto']}
+                    />
+                </div>
+            </div>
+        )}
 
         <div className="mt-8">
             <h2 className="text-2xl font-semibold text-cyan-300 mb-4">Node Health & Details</h2>

@@ -22,6 +22,7 @@ const PacketDeliveryLog: React.FC<PacketDeliveryLogProps> = ({ packets, onClear 
       <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
         {packets.slice().reverse().map(packet => {
           const isDelivered = packet.status === 'delivered';
+          const durationInSeconds = (packet.transmissionTime / 1000).toFixed(1);
           return (
           <div key={packet.id} className={`bg-gray-700/50 p-2.5 rounded-md text-sm border-l-2 ${isDelivered ? 'border-green-400' : 'border-red-400'}`}>
             <div className="flex items-start space-x-2">
@@ -37,7 +38,7 @@ const PacketDeliveryLog: React.FC<PacketDeliveryLogProps> = ({ packets, onClear 
                
                 <div className="flex-grow">
                      <p className={`font-bold text-xs ${isDelivered ? 'text-green-300' : 'text-red-300'}`}>
-                        AI Packet {isDelivered ? 'Delivered' : 'Dropped'}
+                        AI Packet {isDelivered ? 'Delivered' : 'Dropped'} ({durationInSeconds}s)
                      </p>
                     <p className="text-xs text-gray-400 leading-tight"><span className="font-semibold text-cyan-400">From:</span> {packet.from}</p>
                     <p className="text-xs text-gray-400 leading-tight"><span className="font-semibold text-cyan-400">To:</span> {packet.to}</p>

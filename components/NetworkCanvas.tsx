@@ -1,3 +1,4 @@
+
 import React, { useState, MouseEvent, forwardRef } from 'react';
 import { Node, Connection, NetworkComponentType, AnimatedPacket } from '../types';
 import { NodeIcon } from './NodeIcon';
@@ -15,11 +16,13 @@ interface NetworkCanvasProps {
   isConnectionMode: boolean;
   isPacketSimulationMode: boolean;
   onNodeClickForSimulation: (id: string) => void;
-  packetSimSourceNode: string | null;
+  packetSimSourceNodes: string[];
   animatedPackets: AnimatedPacket[];
   isolatedMaliciousNodeIds: string[];
   droppedPacketEvents: { id: string, x: number, y: number }[];
   weakNodeIds: string[];
+  clusterHeadIds: string[];
+  saveSnapshot: () => void;
 }
 
 const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
@@ -35,11 +38,13 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   isConnectionMode,
   isPacketSimulationMode,
   onNodeClickForSimulation,
-  packetSimSourceNode,
+  packetSimSourceNodes,
   animatedPackets,
   isolatedMaliciousNodeIds,
   droppedPacketEvents,
   weakNodeIds,
+  clusterHeadIds,
+  saveSnapshot,
 }, ref) => {
   const [draggingNode, setDraggingNode] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
@@ -63,6 +68,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
             if(isConnecting !== id) {
                 const exists = connections.some(c => (c.from === isConnecting && c.to === id) || (c.from === id && c.to === isConnecting));
                 if (!exists) {
+                    saveSnapshot();
                     setConnections(prev => [...prev, { id: `${isConnecting}-${id}-${Date.now()}`, from: isConnecting, to: id }]);
                 }
             }
@@ -192,7 +198,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
         {isPacketSimulationMode && (
             <div className='absolute top-2 left-3 text-sm text-yellow-300 bg-gray-900/70 backdrop-blur-sm px-3 py-1 rounded-lg z-10'
                     aria-live="polite">
-                {packetSimSourceNode ? 'Select a destination node.' : 'Select a source node for packet simulation.'}
+                Click a node to send a packet to the Base Station. Click again to deselect.
             </div>
         )}
       <svg className="absolute top-0 left-0 w-full h-full">
@@ -296,6 +302,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
             const toNode = nodes.find(n => n.id === packet.path[packet.path.length - 1]);
             const fromNodeIndex = fromNode ? nodes.indexOf(fromNode) + 1 : '?';
             const toNodeIndex = toNode ? nodes.indexOf(toNode) + 1 : '?';
+            const durationInSeconds = (packet.duration / 1000).toFixed(1);
 
             const pathString = packet.path.map(nodeId => {
                 const node = nodes.find(n => n.id === nodeId);
@@ -309,6 +316,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
                         <p className="font-bold text-cyan-400">Packet In Transit</p>
                         <p><span className="font-semibold">From:</span> Node {fromNodeIndex}</p>
                         <p><span className="font-semibold">To:</span> Node {toNodeIndex}</p>
+                        <p><span className="font-semibold">Est. Time:</span> {durationInSeconds}s</p>
                         <p><span className="font-semibold">Full Path:</span> {pathString}</p>
                         <p className="mt-1 font-semibold">Message:</p>
                         <p className="whitespace-pre-wrap break-words max-h-16 overflow-y-auto font-mono text-gray-300 text-[11px] bg-black/20 p-1 rounded">
@@ -322,8 +330,9 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
       {nodes.map((node, index) => {
         const isSelected = selectedNodeId === node.id && !isConnectionMode && !isPacketSimulationMode;
         const isConnSource = isConnecting === node.id;
-        const isSimSource = packetSimSourceNode === node.id;
+        const isSimSource = packetSimSourceNodes.includes(node.id);
         const isWeak = weakNodeIds.includes(node.id);
+        const isClusterHead = clusterHeadIds.includes(node.id);
         return (
             <div
             key={node.id}
@@ -334,11 +343,14 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
             } ${
                 isConnSource ? 'animate-pulse ring-2 ring-green-400' : ''
             } ${
-                isSimSource ? 'animate-pulse ring-2 ring-yellow-400' : ''
+                isSimSource ? 'animate-pulse ring-2 ring-purple-400' : ''
             } rounded-full flex items-center justify-center`}
             style={{ left: node.x, top: node.y, transform: 'translate(-50%, -50%)' }}
             onMouseDown={e => handleMouseDown(e, node.id)}
             >
+             {isClusterHead && (
+                <div className="absolute inset-[-4px] rounded-full border-2 border-yellow-300 animate-pulse" title="Cluster Head"></div>
+             )}
              {node.isMalicious && (
                 <div className="absolute inset-0 rounded-full bg-red-500/50 animate-pulse"></div>
               )}
@@ -346,7 +358,9 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
                 <div className="absolute -inset-1 rounded-full border-2 border-orange-500 animate-pulse" title="Low Energy Efficiency"></div>
              )}
             <NodeIcon type={node.type} />
-            <span className="absolute text-white text-xs font-bold pointer-events-none" style={{ textShadow: '0 0 3px black' }}>
+            <span 
+                className={`absolute text-white text-xs font-bold pointer-events-none ${isClusterHead ? 'text-yellow-300' : ''}`} 
+                style={{ textShadow: '0 0 3px black' }}>
                 {index + 1}
             </span>
             </div>

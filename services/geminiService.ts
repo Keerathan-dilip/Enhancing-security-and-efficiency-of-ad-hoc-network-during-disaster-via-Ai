@@ -6,7 +6,9 @@ interface NetworkInsightsData {
   topology: string;
   avgDegree: number;
   isolatedNodes: number;
-  bottlenecks: number;
+  routerCount: number;
+  switchCount: number;
+  baseStationCount: number;
   avgEnergyEfficiency: number;
   weakNodes: number;
 }
@@ -27,14 +29,15 @@ class GeminiService {
     }
     
     const prompt = `
-      As a network engineering expert, explain the following network topology in a structured way for a simulation tool: "${topology}".
-      
-      Your explanation should have three parts:
-      1.  **Definition**: A concise definition of the topology.
-      2.  **Protocols**: List the common routing protocols associated with it (like AODV, DSR, OLSR). It is very important that you wrap each protocol name in double asterisks, for example: **AODV**.
-      3.  **Mechanism**: Explain how the topology and its protocols work in an ad hoc network. Describe how data is routed or how the network structure is maintained.
-      
-      Keep the tone professional and the explanation clear. Use section headers like "Definition:", "Protocols:", and "Mechanism:". Do not use markdown headings (like '#').
+      As a network engineering expert, provide a detailed analysis of the following network topology for a simulation tool: "${topology}".
+
+      Your explanation must be structured with the following sections. Use the exact section headers provided below, wrapping them in double asterisks (e.g., **Definition:**). Also, wrap each protocol name you mention in double asterisks (e.g., **AODV**).
+
+      **Definition:** A detailed, one-paragraph explanation of what this topology is.
+      **Use Cases:** A one-paragraph description of the typical environments or scenarios where this topology is deployed.
+      **Advantages:** A list of 2-3 key strengths of this topology. Start each point on a new line with an asterisk (*).
+      **Disadvantages:** A list of 2-3 key weaknesses or challenges. Start each point on a new line with an asterisk (*).
+      **Applicable Protocols:** State the primary ad hoc routing protocol that is most suitable. Then, briefly mention one or two common alternative protocols.
     `;
 
     try {
@@ -57,26 +60,26 @@ class GeminiService {
 
     const prompt = `
       You are an expert network analyst providing insights for a network simulation tool.
-      Based on the following data from a user-designed ad hoc network, provide a concise analysis.
+      The user has designed a network in the visual builder. Based on the following live data, provide a concise analysis that is **completely related** to their specific design.
 
       Network Data:
-      - Node Count: ${data.nodeCount}
+      - Total Node Count: ${data.nodeCount}
+      - Infrastructure: ${data.routerCount} Routers, ${data.switchCount} Switches, ${data.baseStationCount} Base Stations
       - Connection Count: ${data.connectionCount}
       - Identified Topology: ${data.topology}
-      - Average Node Degree: ${(data.avgDegree).toFixed(2)}
+      - Average Node Degree (Connections per node): ${(data.avgDegree).toFixed(2)}
       - Isolated Nodes (0 connections): ${data.isolatedNodes}
-      - Potential Bottlenecks (nodes with high connectivity): ${data.bottlenecks}
-      - Average Energy Efficiency: ${data.avgEnergyEfficiency.toFixed(1)}%
+      - Average Mobile Node Energy Efficiency: ${data.avgEnergyEfficiency.toFixed(1)}%
       - Weak Nodes (efficiency < 85%): ${data.weakNodes}
 
       Please structure your response with the following sections, using markdown bold for headers (e.g., **Overall Health**). Do not use any other markdown.
 
-      **Overall Health:** A one-sentence summary of the network's condition.
-      **Strengths:** 2-3 bullet points on what is good about this configuration. Use '*' for bullet points.
-      **Risks & Weaknesses:** 2-3 bullet points on potential issues or risks. Use '*' for bullet points.
-      **Recommendations:** 2-3 bullet points with actionable advice for improvement. Use '*' for bullet points.
+      **Overall Health:** A one-sentence summary of the network's condition based on the data.
+      **Strengths:** 2-3 bullet points on what is good about this specific configuration, referencing the data provided (e.g., "Good use of routers for segmentation"). Use '*' for bullet points.
+      **Risks & Weaknesses:** 2-3 bullet points on potential issues, referencing the data (e.g., "${data.isolatedNodes} isolated nodes cannot communicate"). Use '*' for bullet points.
+      **Recommendations:** 2-3 bullet points with actionable advice for improvement (e.g., "Use the 'Auto-Connect' feature to integrate isolated nodes."). Use '*' for bullet points.
 
-      Keep the language clear, direct, and helpful for someone designing a network.
+      Keep the language clear, direct, and helpful. Your analysis must be grounded in the provided numbers.
     `;
 
     try {
@@ -95,7 +98,7 @@ class GeminiService {
     return `
       **Overall Health:** A moderately robust network with good potential, but requires attention to connectivity and node health.
       **Strengths:**
-      * The cluster-based structure is efficient for scalability.
+      * The cluster-based structure with ${data.routerCount} routers is efficient for scalability.
       * A majority of nodes have high energy efficiency.
       **Risks & Weaknesses:**
       * ${data.isolatedNodes > 0 ? `There are ${data.isolatedNodes} isolated nodes that cannot communicate.` : 'Connectivity seems generally good.'}
@@ -109,25 +112,61 @@ class GeminiService {
   private getMockDescription(topology: string): string {
     switch(topology.toLowerCase()) {
         case 'star topology':
-            return `Definition: A star topology is a network setup where every node connects to a central hub. All traffic passes through this central device.
-Protocols: This is a centralized topology, so it doesn't use ad hoc routing protocols like **AODV**. It relies on the central hub's logic, similar to infrastructure-based Wi-Fi.
-Mechanism: The central hub (e.g., an Access Point) manages all connections and routes data between nodes. If a node wants to communicate with another, it sends the data to the hub, which then forwards it to the destination node. This is efficient but creates a single point of failure.`;
+            return `**Definition:** A star topology is a network setup where every node connects to a central hub, like a switch or router. All traffic passes through this central point.
+**Use Cases:** Commonly found in home and small office networks (e.g., Wi-Fi), where devices connect to a central wireless router.
+**Advantages:**
+* Easy to install and manage.
+* Failure of a single node does not affect the rest of the network.
+* Easy to add new nodes.
+**Disadvantages:**
+* If the central hub fails, the entire network goes down.
+* Performance is dependent on the capability of the central hub.
+* Can be more expensive due to the cost of the central device.
+**Applicable Protocols:** This centralized topology does not use ad hoc protocols. A common infrastructure protocol is **802.11 (Wi-Fi)**.`;
         case 'ring topology':
-            return `Definition: In a ring topology, each node is connected to exactly two other nodes, forming a single continuous pathway for signals.
-Protocols: **Token Ring** is a classic protocol for this topology. It is not typically used for dynamic ad hoc networks.
-Mechanism: A special data packet called a "token" circulates around the ring. A node can only transmit data when it possesses the token. This prevents data collisions but can be inefficient as nodes must wait for the token. A single node failure can break the ring.`;
+            return `**Definition:** In a ring topology, each node is connected to exactly two other nodes, forming a single continuous pathway for signals through each node - like a circle.
+**Use Cases:** Often used in metropolitan area networks (MANs) and some office buildings.
+**Advantages:**
+* Performs better than a bus topology under heavy network load.
+* Prevents network collisions due to its unidirectional data flow.
+* No central hub required.
+**Disadvantages:**
+* Failure of one node or cable can disrupt the entire network.
+* Changes made to the network, like adding or removing nodes, affect the whole network.
+* Troubleshooting is difficult as a single fault can be hard to locate.
+**Applicable Protocols:** The primary protocol is **Token Ring**. It is not typically used for dynamic ad hoc networks.`;
         case 'mesh topology':
-            return `Definition: A mesh topology is a highly reliable setup where nodes are interconnected with many redundant paths.
-Protocols: Common ad hoc protocols include **AODV** (Ad hoc On-Demand Distance Vector), **DSR** (Dynamic Source Routing), and **OLSR** (Optimized Link State Routing).
-Mechanism: Nodes act as routers for each other to forward data. When a node wants to send a packet, protocols like **AODV** discover a route by broadcasting a request. Intermediate nodes relay this request until it reaches the destination, establishing a path. This allows the network to be self-healing and adapt to node failures or movement.`;
+            return `**Definition:** A mesh topology is a highly reliable setup where nodes are interconnected with many redundant paths, meaning most nodes are connected to multiple other nodes.
+**Use Cases:** Ideal for critical applications like city-wide Wi-Fi, public safety communications, and large-scale ad hoc networks where reliability is paramount.
+**Advantages:**
+* Highly robust; failure of one node rarely disrupts the network.
+* Can handle high amounts of traffic.
+* Adding new nodes does not disrupt network communication.
+**Disadvantages:**
+* Can be very expensive and complex to install and maintain due to extensive cabling.
+* High potential for redundant connections, which can be inefficient.
+**Applicable Protocols:** The primary protocol is **AODV** (Ad hoc On-Demand Distance Vector). Alternatives include **DSR** and **OLSR**.`;
         case 'cluster mesh topology':
-            return `Definition: A hybrid topology that combines features of cluster and mesh networks. Nodes are organized into clusters, and within each cluster, nodes are highly interconnected in a mesh-like fashion.
-Protocols: This topology benefits from hybrid protocols like **ZRP** (Zone Routing Protocol). Intra-cluster routing can use proactive protocols (like **OLSR**), while inter-cluster routing can use reactive protocols (like **AODV**).
-Mechanism: Cluster-heads manage their respective clusters and form a backbone for inter-cluster communication. Within a cluster, the mesh structure provides robust, redundant paths, making it resilient to node failure. This approach offers both the scalability of a clustered network and the reliability of a mesh network.`;
+            return `**Definition:** A hybrid topology where nodes are organized into groups or 'clusters,' each with a designated cluster head. Connections within each cluster are dense (like a mesh), and cluster heads are interconnected.
+**Use Cases:** Excellent for large, scalable mobile ad hoc networks (MANETs) or wireless sensor networks where energy efficiency and organization are key.
+**Advantages:**
+* Combines the scalability of a cluster/star topology with the robustness of a mesh.
+* Improves routing efficiency and reduces overhead.
+* Enhances network lifetime by rotating cluster heads.
+**Disadvantages:**
+* More complex to manage due to the hierarchical structure.
+* Performance can depend heavily on the cluster head selection algorithm.
+**Applicable Protocols:** The primary protocol is **ZRP** (Zone Routing Protocol). An alternative for simple clustering is **LEACH**.`;
         default:
-            return `Definition: This is a custom or hybrid network configuration, often forming dynamic clusters. It combines elements of different topologies to suit specific needs.
-Protocols: Hierarchical or hybrid protocols like **ZRP** (Zone Routing Protocol) and **LEACH** (Low-Energy Adaptive Clustering Hierarchy) are common.
-Mechanism: Nodes are grouped into clusters, each with a cluster-head. Communication within a cluster is direct, while communication between clusters goes through the cluster-heads. This reduces routing overhead and saves energy, providing a balance of efficiency and scalability.`;
+            return `**Definition:** This is a custom or hybrid network configuration, often forming dynamic clusters where nodes group together based on proximity or other criteria.
+**Use Cases:** Suited for dynamic environments like mobile ad hoc networks (MANETs) or wireless sensor networks where nodes are mobile or may be added/removed frequently.
+**Advantages:**
+* Can be highly adaptive and energy-efficient.
+* Scalable for large numbers of nodes.
+**Disadvantages:**
+* Overhead in maintaining clusters can be high.
+* Can be complex to implement and manage.
+**Applicable Protocols:** The primary protocol is **LEACH** (Low-Energy Adaptive Clustering Hierarchy). An alternative for more complex routing is **ZRP**.`;
     }
   }
 }

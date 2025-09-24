@@ -12,6 +12,7 @@ export const SIMULATION_RESULTS: { [key: string]: SimulationParameters } = {
     'Energy Efficiency': 0.90,
     'Robustness Index': 0.92,
     'Adaptability Rate': 0.88,
+    'Throughput (Mbps)': 54,
   },
   'Traditional': { // Averaged from DVR, LSR, ACO for comparison
     'Packet Delivery Ratio': 0.88,
@@ -23,6 +24,7 @@ export const SIMULATION_RESULTS: { [key: string]: SimulationParameters } = {
     'Energy Efficiency': 0.86,
     'Robustness Index': 0.87,
     'Adaptability Rate': 0.84,
+    'Throughput (Mbps)': 40,
   },
 };
 
