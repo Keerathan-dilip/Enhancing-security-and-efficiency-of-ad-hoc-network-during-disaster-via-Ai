@@ -16,6 +16,9 @@ const PACKET_ANIMATION_DURATION_AI = 4000; // ms
 const PACKET_ANIMATION_DURATION_TRADITIONAL = 5500; // ms
 const PACKET_SIMULATION_DURATION = 8000; // 8s
 const JIGGLE_AMPLITUDE = 2; // Pixels for node movement in simulation
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 3.0;
+const ZOOM_STEP = 0.1;
 
 const SaveNetworkModal: React.FC<{
     isOpen: boolean;
@@ -126,6 +129,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const canvasRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
   const mobilityFrameRef = useRef<number | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   // New states for real-time updates and message simulation
   const [hasAnalyzedOnce, setHasAnalyzedOnce] = useState(false);
@@ -143,6 +147,15 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [networkDataToSave, setNetworkDataToSave] = useState('');
   const [clusterHeadIds, setClusterHeadIds] = useState<string[]>([]);
+  const canvasViewportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (canvasViewportRef.current) {
+        const { scrollWidth, scrollHeight, clientWidth, clientHeight } = canvasViewportRef.current;
+        canvasViewportRef.current.scrollLeft = (scrollWidth - clientWidth) / 2;
+        canvasViewportRef.current.scrollTop = (scrollHeight - clientHeight) / 2;
+    }
+  }, []);
 
   const stopMobility = useCallback(() => {
     if (mobilityFrameRef.current) {
@@ -375,6 +388,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             setIsConnectionMode(false);
             setSelectedNodeId(null);
             setSelectedConnectionId(null);
+            startMobility();
         } else {
             stopMobility();
         }
@@ -402,9 +416,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         // Deselecting node
         const newSourceNodes = packetSimSourceNodes.filter(id => id !== nodeId);
         setPacketSimSourceNodes(newSourceNodes);
-        if (newSourceNodes.length === 0) {
-            stopMobility();
-        }
     } else {
         // Selecting new source node
         if (packetSimSourceNodes.length >= 15) {
@@ -413,11 +424,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         }
 
         const newSourceNodes = [...packetSimSourceNodes, nodeId];
-        
-        if (packetSimSourceNodes.length === 0) {
-            startMobility();
-        }
-
         setPacketSimSourceNodes(newSourceNodes);
 
         const maliciousNodeIds = nodes.filter(n => n.isMalicious).map(n => n.id);
@@ -481,6 +487,49 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     setNodes((prev) => [...prev, newNode]);
   };
 
+    const handleFitToView = useCallback(() => {
+        if (nodes.length === 0 || !canvasViewportRef.current) return;
+
+        const padding = 50;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        nodes.forEach(node => {
+            minX = Math.min(minX, node.x);
+            minY = Math.min(minY, node.y);
+            maxX = Math.max(maxX, node.x);
+            maxY = Math.max(maxY, node.y);
+        });
+
+        const networkWidth = maxX - minX;
+        const networkHeight = maxY - minY;
+        
+        if (networkWidth === 0 && networkHeight === 0) {
+            setZoom(1);
+            if (canvasViewportRef.current) {
+              canvasViewportRef.current.scrollLeft = minX - (canvasViewportRef.current.clientWidth / 2);
+              canvasViewportRef.current.scrollTop = minY - (canvasViewportRef.current.clientHeight / 2);
+            }
+            return;
+        }
+
+        const { clientWidth: viewportWidth, clientHeight: viewportHeight } = canvasViewportRef.current;
+        
+        const zoomX = networkWidth > 0 ? (viewportWidth - padding * 2) / networkWidth : Infinity;
+        const zoomY = networkHeight > 0 ? (viewportHeight - padding * 2) / networkHeight : Infinity;
+        const newZoom = Math.min(zoomX, zoomY, MAX_ZOOM, 1);
+        
+        setZoom(newZoom);
+
+        setTimeout(() => {
+            if (canvasViewportRef.current) {
+                const centerX = minX + networkWidth / 2;
+                const centerY = minY + networkHeight / 2;
+                canvasViewportRef.current.scrollLeft = (centerX * newZoom) - (viewportWidth / 2) + padding;
+                canvasViewportRef.current.scrollTop = (centerY * newZoom) - (viewportHeight / 2) + padding;
+            }
+        }, 0);
+    }, [nodes]);
+
   const generateNetwork = useCallback((
     count: number, 
     topology: NetworkTopology,
@@ -499,13 +548,18 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     let newNodes: Node[] = [];
     let newConnections: Connection[] = [];
     const canvasEl = canvasRef.current;
-    const padding = 40;
-    const canvasWidth = canvasEl ? canvasEl.clientWidth - padding : 800;
-    const canvasHeight = canvasEl ? canvasEl.clientHeight - padding : 600;
+    const viewportEl = canvasViewportRef.current;
+    
+    // Generate within the visible viewport area, starting from the top-left.
+    const padding = 80; // Margin from the edges of the viewport
+    const canvasWidth = viewportEl ? viewportEl.clientWidth - padding * 2 : 1000;
+    const canvasHeight = viewportEl ? viewportEl.clientHeight - padding * 2 : 600;
+    const offsetX = padding;
+    const offsetY = padding;
 
     const createNode = (i: number, x: number, y: number, type: NetworkComponentType = NetworkComponentType.NODE): Node => {
         const base = {
-            id: `${type.toLowerCase()}-${Date.now()}-${i}`, type, x, y,
+            id: `${type.toLowerCase()}-${Date.now()}-${i}`, type, x: x + offsetX, y: y + offsetY,
             ipAddress: `192.168.1.${i + 1}`, isMalicious: false,
         };
         switch (type) {
@@ -517,7 +571,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     };
     
     if (topology === 'cluster' || topology === 'cluster-mesh') {
-        // This topology already includes a Base Station by design.
         const actualNumClusterHeads = Math.max(1, numClusterHeads);
         if (count <= actualNumClusterHeads) {
             alert('Node count must be greater than the number of cluster heads.');
@@ -527,18 +580,17 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const numEndNodes = count - actualNumClusterHeads;
         const clusterHubs: Node[] = [];
 
-        // Add Base Station
         const baseStation = createNode(count, canvasWidth / 2, padding / 2, NetworkComponentType.BASE_STATION);
         newNodes.push(baseStation);
         
         const clusterHeadType = includeRouters ? NetworkComponentType.ROUTER : NetworkComponentType.NODE;
 
-        // Create cluster heads
         for (let c = 0; c < actualNumClusterHeads; c++) {
             const angle = (c / actualNumClusterHeads) * 2 * Math.PI;
-            const radius = Math.min(canvasWidth, canvasHeight) / 3.5;
-            const hubX = canvasWidth / 2 + radius * Math.cos(angle);
-            const hubY = canvasHeight / 2 + radius * Math.sin(angle);
+            const radiusX = canvasWidth / 3;
+            const radiusY = canvasHeight / 3;
+            const hubX = canvasWidth / 2 + radiusX * Math.cos(angle);
+            const hubY = canvasHeight / 2 + radiusY * Math.sin(angle);
             const clusterHub = createNode(numEndNodes + c, hubX, hubY, clusterHeadType);
             newNodes.push(clusterHub);
             clusterHubs.push(clusterHub);
@@ -557,10 +609,9 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             for (let i = 0; i < nodesInThisCluster; i++) {
                 const angle = Math.random() * 2 * Math.PI;
                 const radius = Math.random() * clusterRadius;
-                const node = createNode(nodesPlaced, clusterHub.x + Math.cos(angle) * radius, clusterHub.y + Math.sin(angle) * radius);
+                const node = createNode(nodesPlaced, clusterHub.x - offsetX + Math.cos(angle) * radius, clusterHub.y - offsetY + Math.sin(angle) * radius);
                 newNodes.push(node);
                 allClusterNodes[c].push(node);
-                // For 'cluster' topology, connect directly to hub
                 if (topology === 'cluster') {
                     newConnections.push({ id: `${node.id}-${clusterHub.id}-${Date.now()}`, from: node.id, to: clusterHub.id });
                 }
@@ -569,7 +620,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         }
         
         if (topology === 'cluster-mesh') {
-            const K_NEAREST_IN_CLUSTER = 3;
+             const K_NEAREST_IN_CLUSTER = 3;
             allClusterNodes.forEach(cluster => {
                 if(cluster.length < 2) return;
                 cluster.forEach(sourceNode => {
@@ -589,7 +640,6 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             });
         }
         
-        // Connect cluster hubs to each other and to the base station
         for(let i = 0; i < clusterHubs.length; i++) {
             newConnections.push({ id: `${clusterHubs[i].id}-${baseStation.id}-${Date.now()}`, from: clusterHubs[i].id, to: baseStation.id });
             for (let j = i + 1; j < clusterHubs.length; j++) {
@@ -605,9 +655,9 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const numSwitches = includeSwitches ? Math.max(1, Math.floor(count / 30)) : 0;
         const numEndNodes = count - numRouters - numSwitches;
 
-        for (let i = 0; i < numEndNodes; i++) newNodes.push(createNode(i, Math.random() * canvasWidth + padding / 2, Math.random() * canvasHeight + padding / 2));
-        for (let i = 0; i < numRouters; i++) newNodes.push(createNode(numEndNodes + i, Math.random() * canvasWidth + padding / 2, Math.random() * canvasHeight + padding / 2, NetworkComponentType.ROUTER));
-        for (let i = 0; i < numSwitches; i++) newNodes.push(createNode(numEndNodes + numRouters + i, Math.random() * canvasWidth + padding / 2, Math.random() * canvasHeight + padding / 2, NetworkComponentType.SWITCH));
+        for (let i = 0; i < numEndNodes; i++) newNodes.push(createNode(i, Math.random() * canvasWidth, Math.random() * (canvasHeight - padding) + padding));
+        for (let i = 0; i < numRouters; i++) newNodes.push(createNode(numEndNodes + i, Math.random() * canvasWidth, Math.random() * (canvasHeight - padding) + padding, NetworkComponentType.ROUTER));
+        for (let i = 0; i < numSwitches; i++) newNodes.push(createNode(numEndNodes + numRouters + i, Math.random() * canvasWidth, Math.random() * (canvasHeight- padding) + padding, NetworkComponentType.SWITCH));
         
         const infraNodes = newNodes.filter(n => n.type !== NetworkComponentType.NODE);
         const endNodes = newNodes.filter(n => n.type === NetworkComponentType.NODE);
@@ -652,7 +702,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const cols = Math.ceil(Math.sqrt(count * (canvasWidth / canvasHeight)));
         const rows = Math.ceil(count / cols);
         const xSpacing = canvasWidth / (cols + 1);
-        const ySpacing = canvasHeight / (rows + 1);
+        const ySpacing = (canvasHeight - padding * 2) / (rows + 1);
         let routerPlaced = 0;
         const gridNodes: Node[] = [];
 
@@ -660,7 +710,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             const row = Math.floor(i / cols);
             const col = i % cols;
             const x = (col + 1) * xSpacing;
-            const y = (row + 1) * ySpacing;
+            const y = (row + 1) * ySpacing + padding;
 
             if (includeRouters && routerPlaced < numRouters && row > 0 && col > 0 && row < rows -1 && col < cols - 1 && (row % 3 === 1 && col % 3 === 1)) {
                  gridNodes.push(createNode(i, x, y, NetworkComponentType.ROUTER));
@@ -677,17 +727,18 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             newConnections.push({ id: `${baseStation.id}-${closestNode.id}-${Date.now()}`, from: baseStation.id, to: closestNode.id });
         }
     } else if (topology === 'ring' || topology === 'bus') {
-        const centerX = canvasWidth / 2 + padding / 2;
-        const centerY = canvasHeight / 2 + padding / 2;
+        const centerX = canvasWidth / 2;
+        const centerY = canvasHeight / 2;
         const baseStation = createNode(count, centerX, padding, NetworkComponentType.BASE_STATION);
         
         const topologyNodes: Node[] = [];
 
         if (topology === 'ring') {
-            const radius = Math.min(canvasWidth, canvasHeight) / 2 - padding;
+            const radiusX = canvasWidth / 2 - padding;
+            const radiusY = canvasHeight / 2 - padding;
             for (let i = 0; i < count; i++) {
                 const angle = (i / count) * 2 * Math.PI;
-                topologyNodes.push(createNode(i, centerX + radius * Math.cos(angle), centerY + radius * Math.sin(angle)));
+                topologyNodes.push(createNode(i, centerX + radiusX * Math.cos(angle), centerY + radiusY * Math.sin(angle)));
             }
             for (let i = 0; i < count; i++) {
                 newConnections.push({ id: `conn-${i}-${Date.now()}`, from: topologyNodes[i].id, to: topologyNodes[(i + 1) % count].id });
@@ -695,7 +746,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         } else { // Bus
             const xSpacing = canvasWidth / (count + 1);
             for (let i = 0; i < count; i++) {
-                topologyNodes.push(createNode(i, (i + 1) * xSpacing + padding / 2, centerY));
+                topologyNodes.push(createNode(i, (i + 1) * xSpacing, centerY));
             }
             for (let i = 0; i < count - 1; i++) {
                 newConnections.push({ id: `conn-${i}-${Date.now()}`, from: topologyNodes[i].id, to: topologyNodes[i + 1].id });
@@ -710,18 +761,18 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         newNodes.push(baseStation, ...topologyNodes);
 
     } else if (topology === 'star') {
-        // Star topology already uses a Base Station as its central hub.
-        const centerX = canvasWidth / 2 + padding / 2;
-        const centerY = canvasHeight / 2 + padding / 2;
+        const centerX = canvasWidth / 2;
+        const centerY = canvasHeight / 2;
         const hubNode = createNode(0, centerX, centerY, NetworkComponentType.BASE_STATION);
         newNodes.push(hubNode);
     
         if (count > 1) {
             const peripheralCount = count - 1;
-            const radius = Math.min(canvasWidth, canvasHeight) / 2 - padding;
+            const radiusX = canvasWidth / 2 - padding;
+            const radiusY = canvasHeight / 2 - padding;
             for (let i = 0; i < peripheralCount; i++) {
                 const angle = (i / peripheralCount) * 2 * Math.PI;
-                const pNode = createNode(i + 1, centerX + radius * Math.cos(angle), centerY + radius * Math.sin(angle));
+                const pNode = createNode(i + 1, centerX + radiusX * Math.cos(angle), centerY + radiusY * Math.sin(angle));
                 newNodes.push(pNode);
                 newConnections.push({ id: `${hubNode.id}-${pNode.id}-${Date.now()}`, from: pNode.id, to: hubNode.id });
             }
@@ -732,7 +783,11 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     setConnections(newConnections);
     setSelectedNodeId(null);
     setIsConnectionMode(false);
-  }, [setNodes, setConnections, clearAnalysis, saveSnapshot]);
+    
+    // Use timeout to ensure nodes are rendered before fitting
+    setTimeout(() => handleFitToView(), 100);
+
+  }, [setNodes, setConnections, clearAnalysis, saveSnapshot, handleFitToView]);
 
   const updateNode = useCallback((updatedNode: Node) => {
     setNodes((prev) => prev.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
@@ -1253,6 +1308,10 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   const selectedConnection = connections.find(c => c.id === selectedConnectionId) || null;
   const weakNodes = nodes.filter(n => n.type === NetworkComponentType.NODE && n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD);
 
+  const handleZoomIn = () => setZoom(z => Math.min(MAX_ZOOM, z + ZOOM_STEP));
+  const handleZoomOut = () => setZoom(z => Math.max(MIN_ZOOM, z - ZOOM_STEP));
+  const handleZoomReset = () => setZoom(1);
+
   return (
     <>
       <div className="h-full flex flex-col gap-4 animate-fadeIn">
@@ -1323,29 +1382,40 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
               </div>
 
           </div>
-          <div className="w-full lg:w-3/4 xl:w-4/5">
-              <NetworkCanvas
-                  ref={canvasRef}
-                  nodes={nodes}
-                  setNodes={setNodes}
-                  connections={connections}
-                  setConnections={setConnections}
-                  selectedNodeId={selectedNodeId}
-                  setSelectedNodeId={setSelectedNodeId}
-                  selectedConnectionId={selectedConnectionId}
-                  setSelectedConnectionId={setSelectedConnectionId}
-                  onAddComponent={addNode}
-                  isConnectionMode={isConnectionMode}
-                  isPacketSimulationMode={isPacketSimulationMode}
-                  onNodeClickForSimulation={handleNodeClickForSimulation}
-                  packetSimSourceNodes={packetSimSourceNodes}
-                  animatedPackets={animatedPackets}
-                  isolatedMaliciousNodeIds={isolatedMaliciousNodeIds}
-                  droppedPacketEvents={droppedPacketEvents}
-                  weakNodeIds={weakNodes.map(n => n.id)}
-                  clusterHeadIds={clusterHeadIds}
-                  saveSnapshot={saveSnapshot}
-              />
+          <div className="w-full lg:w-3/4 xl:w-4/5 relative">
+            <div ref={canvasViewportRef} className="w-full h-full bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 overflow-auto">
+                <NetworkCanvas
+                    ref={canvasRef}
+                    nodes={nodes}
+                    setNodes={setNodes}
+                    connections={connections}
+                    setConnections={setConnections}
+                    selectedNodeId={selectedNodeId}
+                    setSelectedNodeId={setSelectedNodeId}
+                    selectedConnectionId={selectedConnectionId}
+                    setSelectedConnectionId={setSelectedConnectionId}
+                    onAddComponent={addNode}
+                    isConnectionMode={isConnectionMode}
+                    isPacketSimulationMode={isPacketSimulationMode}
+                    onNodeClickForSimulation={handleNodeClickForSimulation}
+                    packetSimSourceNodes={packetSimSourceNodes}
+                    animatedPackets={animatedPackets}
+                    isolatedMaliciousNodeIds={isolatedMaliciousNodeIds}
+                    droppedPacketEvents={droppedPacketEvents}
+                    weakNodeIds={weakNodes.map(n => n.id)}
+                    clusterHeadIds={clusterHeadIds}
+                    saveSnapshot={saveSnapshot}
+                    zoom={zoom}
+                />
+            </div>
+            <div className="absolute left-4 top-4 z-10 bg-gray-900/50 backdrop-blur-sm rounded-lg p-2 flex flex-col items-center space-y-2 border border-cyan-500/10">
+                <button onClick={handleZoomIn} title="Zoom In" className="w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-cyan-500 rounded-md transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" /></svg></button>
+                <span className="font-bold text-xs text-cyan-200 select-none">{Math.round(zoom * 100)}%</span>
+                <button onClick={handleZoomOut} title="Zoom Out" className="w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-cyan-500 rounded-md transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clipRule="evenodd" /></svg></button>
+                <div className="w-full h-px bg-cyan-500/20"></div>
+                <button onClick={handleFitToView} title="Fit to View" className="w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-cyan-500 rounded-md transition-colors" disabled={nodes.length === 0}><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm14 1a1 1 0 01.993.883L19 5v10a1 1 0 11-2 0V5a1 1 0 011-1zm-9 0a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1z" clipRule="evenodd" /></svg></button>
+                <button onClick={handleZoomReset} title="Reset Zoom" className="w-8 h-8 flex items-center justify-center bg-gray-700 hover:bg-cyan-500 rounded-md transition-colors">1:1</button>
+            </div>
           </div>
         </div>
         {simulationParams && (

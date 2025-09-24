@@ -1,4 +1,3 @@
-
 import React, { useState, MouseEvent, forwardRef } from 'react';
 import { Node, Connection, NetworkComponentType, AnimatedPacket } from '../types';
 import { NodeIcon } from './NodeIcon';
@@ -23,6 +22,7 @@ interface NetworkCanvasProps {
   weakNodeIds: string[];
   clusterHeadIds: string[];
   saveSnapshot: () => void;
+  zoom: number;
 }
 
 const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
@@ -45,11 +45,23 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   weakNodeIds,
   clusterHeadIds,
   saveSnapshot,
+  zoom,
 }, ref) => {
   const [draggingNode, setDraggingNode] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [connectingLine, setConnectingLine] = useState<{ x: number; y: number } | null>(null);
   const [hoveredPacketId, setHoveredPacketId] = useState<string | null>(null);
+
+  const canvasStyle = {
+    width: '3000px',
+    height: '2000px',
+    backgroundColor: '#111827', // bg-gray-900
+    backgroundImage: 'radial-gradient(rgba(55, 65, 81, 0.5) 1px, transparent 0)', // gray-600 with opacity
+    backgroundSize: '25px 25px',
+    transform: `scale(${zoom})`,
+    transformOrigin: 'top left',
+    transition: 'transform 0.1s ease-out',
+  };
 
   const handleConnectionClick = (e: MouseEvent, connectionId: string) => {
     e.stopPropagation();
@@ -63,6 +75,13 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
       onNodeClickForSimulation(id);
       return;
     }
+
+    const canvasEl = (ref as React.RefObject<HTMLDivElement>)?.current;
+    if (!canvasEl) return;
+    const rect = canvasEl.getBoundingClientRect();
+    const mouseX = (e.clientX - rect.left) / zoom;
+    const mouseY = (e.clientY - rect.top) / zoom;
+
     if (isConnectionMode) {
         if (isConnecting) {
             if(isConnecting !== id) {
@@ -83,10 +102,8 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
         setSelectedNodeId(id);
         setSelectedConnectionId(null);
         const node = nodes.find(n => n.id === id);
-        const canvasEl = (ref as React.RefObject<HTMLDivElement>)?.current;
-        if (node && canvasEl) {
-            const rect = canvasEl.getBoundingClientRect();
-            setDraggingNode({ id, offsetX: e.clientX - rect.left - node.x, offsetY: e.clientY - rect.top - node.y });
+        if (node) {
+            setDraggingNode({ id, offsetX: mouseX - node.x, offsetY: mouseY - node.y });
         }
     }
   };
@@ -95,16 +112,16 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
     const canvasEl = (ref as React.RefObject<HTMLDivElement>)?.current;
     if (!canvasEl) return;
     const rect = canvasEl.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const mouseX = (e.clientX - rect.left) / zoom;
+    const mouseY = (e.clientY - rect.top) / zoom;
 
     if (draggingNode) {
       let x = mouseX - draggingNode.offsetX;
       let y = mouseY - draggingNode.offsetY;
       
       const nodeSize = 40;
-      x = Math.max(nodeSize / 2, Math.min(x, rect.width - nodeSize / 2));
-      y = Math.max(nodeSize / 2, Math.min(y, rect.height - nodeSize / 2));
+      x = Math.max(nodeSize / 2, Math.min(x, 3000 - nodeSize / 2));
+      y = Math.max(nodeSize / 2, Math.min(y, 2000 - nodeSize / 2));
 
       setNodes(prev => prev.map(n => (n.id === draggingNode.id ? { ...n, x, y } : n)));
     }
@@ -150,8 +167,8 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
     }
 
     const rect = canvasEl.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    const x = (event.clientX - rect.left) / zoom;
+    const y = (event.clientY - rect.top) / zoom;
 
     onAddComponent(type, x, y);
   };
@@ -181,7 +198,8 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   return (
     <div
       ref={ref}
-      className="w-full h-full bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 relative overflow-hidden"
+      className="relative"
+      style={canvasStyle}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
@@ -191,13 +209,13 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
     >
         {isConnectionMode && (
             <div className='absolute top-2 left-3 text-sm text-yellow-300 bg-gray-900/70 backdrop-blur-sm px-3 py-1 rounded-lg animate-pulse z-10'
-                 aria-live="polite">
+                 aria-live="polite" style={{ transform: `scale(${1/zoom})`, transformOrigin: 'top left'}}>
                 Connection Mode Active: Click two nodes to connect them.
             </div>
         )}
         {isPacketSimulationMode && (
             <div className='absolute top-2 left-3 text-sm text-yellow-300 bg-gray-900/70 backdrop-blur-sm px-3 py-1 rounded-lg z-10'
-                    aria-live="polite">
+                    aria-live="polite" style={{ transform: `scale(${1/zoom})`, transformOrigin: 'top left'}}>
                 Click a node to send a packet to the Base Station. Click again to deselect.
             </div>
         )}
