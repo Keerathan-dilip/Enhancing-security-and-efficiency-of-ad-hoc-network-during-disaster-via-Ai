@@ -5,7 +5,7 @@ interface PropertiesPanelProps {
   node: Node;
   onUpdate: (node: Node) => void;
   onRouterAutoConnect: (routerId: string) => void;
-  onDeleteNode: () => void;
+  onDelete: () => void;
 }
 
 const ToggleSwitch: React.FC<{ labelId: string; checked: boolean; onChange: (checked: boolean) => void }> = ({ labelId, checked, onChange }) => (
@@ -21,7 +21,7 @@ const ToggleSwitch: React.FC<{ labelId: string; checked: boolean; onChange: (che
     </label>
 );
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ node, onUpdate, onRouterAutoConnect, onDeleteNode }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ node, onUpdate, onRouterAutoConnect, onDelete }) => {
   const [ipAddress, setIpAddress] = useState(node.ipAddress);
   const [energyEfficiency, setEnergyEfficiency] = useState(node.energyEfficiency.toString());
   const [energySpent, setEnergySpent] = useState(node.energySpent.toString());
@@ -58,7 +58,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ node, onUpdate, onRou
       <div className="flex justify-between items-start">
         <h3 className="text-lg font-bold text-cyan-300">Properties: <span className='text-sm text-white capitalize'>{node.type.replace('_', ' ').toLowerCase()}</span></h3>
         <button 
-            onClick={onDeleteNode}
+            onClick={onDelete}
             title="Delete Node"
             className="text-gray-400 hover:text-red-400 transition-colors"
         >
@@ -160,7 +160,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ node, onUpdate, onRou
       )}
       <div className="pt-4 border-t border-cyan-500/20">
         <button 
-            onClick={onDeleteNode}
+            onClick={onDelete}
             className="w-full px-5 py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-all duration-300 flex items-center justify-center space-x-2"
         >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>

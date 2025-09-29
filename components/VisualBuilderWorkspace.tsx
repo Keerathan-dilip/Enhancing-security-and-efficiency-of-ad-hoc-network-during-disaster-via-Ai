@@ -114,7 +114,7 @@ const FormattedDescription: React.FC<{ text: string }> = ({ text }) => {
 };
 
 const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, setNodes, connections, setConnections, saveSnapshot }) => {
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   
   const [analysisResult, setAnalysisResult] = useState<{ topology: string; description: string } | null>(null);
@@ -221,22 +221,22 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     }
   }, [selectedConnectionId, setConnections, saveSnapshot]);
 
-    const deleteSelectedNode = useCallback(() => {
-        if (selectedNodeId) {
+    const deleteSelectedNodes = useCallback(() => {
+        if (selectedNodeIds.length > 0) {
             saveSnapshot();
-            setNodes(prev => prev.filter(n => n.id !== selectedNodeId));
-            setConnections(prev => prev.filter(c => c.from !== selectedNodeId && c.to !== selectedNodeId));
-            setSelectedNodeId(null);
+            setNodes(prev => prev.filter(n => !selectedNodeIds.includes(n.id)));
+            setConnections(prev => prev.filter(c => !selectedNodeIds.includes(c.from) && !selectedNodeIds.includes(c.to)));
+            setSelectedNodeIds([]);
         }
-    }, [selectedNodeId, setNodes, setConnections, saveSnapshot]);
+    }, [selectedNodeIds, setNodes, setConnections, saveSnapshot]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
         if ((event.key === 'Delete' || event.key === 'Backspace')) {
             if (selectedConnectionId) {
                 deleteSelectedConnection();
-            } else if (selectedNodeId) {
-                deleteSelectedNode();
+            } else if (selectedNodeIds.length > 0) {
+                deleteSelectedNodes();
             }
         }
     };
@@ -245,7 +245,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     return () => {
         window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedConnectionId, selectedNodeId, deleteSelectedConnection, deleteSelectedNode]);
+  }, [selectedConnectionId, selectedNodeIds, deleteSelectedConnection, deleteSelectedNodes]);
 
 
   useEffect(() => {
@@ -375,7 +375,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
             setPacketSimSourceNodes([]);
             stopMobility();
         }
-        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
         setSelectedConnectionId(null);
         return isEntering;
     });
@@ -386,7 +386,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         const isEntering = !prev;
         if (isEntering) {
             setIsConnectionMode(false);
-            setSelectedNodeId(null);
+            setSelectedNodeIds([]);
             setSelectedConnectionId(null);
             startMobility();
         } else {
@@ -840,7 +840,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     
     setNodes(newNodes);
     setConnections(newConnections);
-    setSelectedNodeId(null);
+    setSelectedNodeIds([]);
     setIsConnectionMode(false);
     
     // Use timeout to ensure nodes are rendered before fitting
@@ -893,6 +893,17 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     }
     setConnections(newConnections);
   }, [nodes, setConnections, saveSnapshot]);
+
+  const handleConnectSelected = useCallback(() => {
+    if (selectedNodeIds.length !== 2) return;
+    const [fromId, toId] = selectedNodeIds;
+    const exists = connections.some(c => (c.from === fromId && c.to === toId) || (c.from === toId && c.to === fromId));
+    if (!exists) {
+        saveSnapshot();
+        setConnections(prev => [...prev, { id: `${fromId}-${toId}-${Date.now()}`, from: fromId, to: toId }]);
+    }
+    setSelectedNodeIds([]);
+  }, [selectedNodeIds, connections, setConnections, saveSnapshot]);
 
   const handleRouterAutoConnect = useCallback((routerId: string) => {
         saveSnapshot();
@@ -1230,7 +1241,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     setConnections(newConnections);
     const remainingClusterHeadIds = clusterHeadIds.filter(id => !weakNodeIds.includes(id));
     setClusterHeadIds(remainingClusterHeadIds);
-    setSelectedNodeId(null);
+    setSelectedNodeIds([]);
     setInsights(null);
     setAnimatedPackets([]);
     
@@ -1363,7 +1374,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
   }, [setNodes, setConnections, clearAnalysis, saveSnapshot]);
 
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
+  const selectedNode = selectedNodeIds.length === 1 ? nodes.find((n) => n.id === selectedNodeIds[0]) : null;
   const selectedConnection = connections.find(c => c.id === selectedConnectionId) || null;
   const weakNodes = nodes.filter(n => n.type === NetworkComponentType.NODE && n.energyEfficiency < WEAK_NODE_EFFICIENCY_THRESHOLD);
 
@@ -1386,6 +1397,8 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                   isPacketSimulationMode={isPacketSimulationMode}
                   onTogglePacketSimulationMode={togglePacketSimulationMode}
                   onAutoConnect={handleAutoConnect}
+                  onConnectSelected={handleConnectSelected}
+                  numSelectedNodes={selectedNodeIds.length}
                   onDownloadReport={handleDownloadFullReport}
                   analysisPerformed={!!analysisResult}
                   isDownloadingReport={isDownloadingReport}
@@ -1409,7 +1422,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                       node={selectedNode} 
                       onUpdate={updateNode} 
                       onRouterAutoConnect={handleRouterAutoConnect}
-                      onDeleteNode={deleteSelectedNode}
+                      onDelete={deleteSelectedNodes}
                   />
               )}
               {selectedConnection && !isConnectionMode && !isPacketSimulationMode && <ConnectionPanel connection={selectedConnection} nodes={nodes} onDelete={deleteSelectedConnection} />}
@@ -1449,8 +1462,8 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                     setNodes={setNodes}
                     connections={connections}
                     setConnections={setConnections}
-                    selectedNodeId={selectedNodeId}
-                    setSelectedNodeId={setSelectedNodeId}
+                    selectedNodeIds={selectedNodeIds}
+                    setSelectedNodeIds={setSelectedNodeIds}
                     selectedConnectionId={selectedConnectionId}
                     setSelectedConnectionId={setSelectedConnectionId}
                     onAddComponent={addNode}

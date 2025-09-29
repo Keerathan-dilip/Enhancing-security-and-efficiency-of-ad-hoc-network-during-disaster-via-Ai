@@ -7,8 +7,8 @@ interface NetworkCanvasProps {
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   connections: Connection[];
   setConnections: React.Dispatch<React.SetStateAction<Connection[]>>;
-  selectedNodeId: string | null;
-  setSelectedNodeId: (id: string | null) => void;
+  selectedNodeIds: string[];
+  setSelectedNodeIds: (ids: string[]) => void;
   selectedConnectionId: string | null;
   setSelectedConnectionId: (id: string | null) => void;
   onAddComponent: (type: NetworkComponentType, x: number, y: number) => void;
@@ -30,8 +30,8 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   setNodes,
   connections,
   setConnections,
-  selectedNodeId,
-  setSelectedNodeId,
+  selectedNodeIds,
+  setSelectedNodeIds,
   selectedConnectionId,
   setSelectedConnectionId,
   onAddComponent,
@@ -47,10 +47,11 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   saveSnapshot,
   zoom,
 }, ref) => {
-  const [draggingNode, setDraggingNode] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const [dragOffsets, setDragOffsets] = useState<Map<string, {offsetX: number, offsetY: number}>>(new Map());
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [connectingLine, setConnectingLine] = useState<{ x: number; y: number } | null>(null);
   const [hoveredPacketId, setHoveredPacketId] = useState<string | null>(null);
+  const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
 
   const canvasStyle = {
     width: '3000px',
@@ -66,7 +67,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   const handleConnectionClick = (e: MouseEvent, connectionId: string) => {
     e.stopPropagation();
     setSelectedConnectionId(connectionId);
-    setSelectedNodeId(null);
+    setSelectedNodeIds([]);
   };
 
   const handleMouseDown = (e: MouseEvent<HTMLDivElement>, id: string) => {
@@ -95,16 +96,32 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
             setConnectingLine(null);
         } else {
             setIsConnecting(id);
-            setSelectedNodeId(null);
+            setSelectedNodeIds([]);
             setSelectedConnectionId(null);
         }
     } else {
-        setSelectedNodeId(id);
         setSelectedConnectionId(null);
-        const node = nodes.find(n => n.id === id);
-        if (node) {
-            setDraggingNode({ id, offsetX: mouseX - node.x, offsetY: mouseY - node.y });
+        
+        const isAlreadySelected = selectedNodeIds.includes(id);
+        let newSelection = selectedNodeIds;
+
+        if (e.shiftKey) {
+            newSelection = isAlreadySelected 
+                ? selectedNodeIds.filter(nid => nid !== id) 
+                : [...selectedNodeIds, id];
+            setSelectedNodeIds(newSelection);
+        } else if (!isAlreadySelected) {
+            newSelection = [id];
+            setSelectedNodeIds(newSelection);
         }
+
+        const newOffsets = new Map<string, {offsetX: number, offsetY: number}>();
+        nodes.forEach(n => {
+            if (newSelection.includes(n.id)) {
+                newOffsets.set(n.id, { offsetX: mouseX - n.x, offsetY: mouseY - n.y });
+            }
+        });
+        setDragOffsets(newOffsets);
     }
   };
 
@@ -115,15 +132,21 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
     const mouseX = (e.clientX - rect.left) / zoom;
     const mouseY = (e.clientY - rect.top) / zoom;
 
-    if (draggingNode) {
-      let x = mouseX - draggingNode.offsetX;
-      let y = mouseY - draggingNode.offsetY;
-      
-      const nodeSize = 40;
-      x = Math.max(nodeSize / 2, Math.min(x, 3000 - nodeSize / 2));
-      y = Math.max(nodeSize / 2, Math.min(y, 2000 - nodeSize / 2));
+    if (dragOffsets.size > 0) {
+      setNodes(prevNodes => prevNodes.map(n => {
+        if (dragOffsets.has(n.id)) {
+          const offset = dragOffsets.get(n.id)!;
+          let x = mouseX - offset.offsetX;
+          let y = mouseY - offset.offsetY;
+          
+          const nodeSize = 40;
+          x = Math.max(nodeSize / 2, Math.min(x, 3000 - nodeSize / 2));
+          y = Math.max(nodeSize / 2, Math.min(y, 2000 - nodeSize / 2));
 
-      setNodes(prev => prev.map(n => (n.id === draggingNode.id ? { ...n, x, y } : n)));
+          return { ...n, x, y };
+        }
+        return n;
+      }));
     }
 
     if (isConnecting) {
@@ -132,11 +155,11 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   };
 
   const handleMouseUp = () => {
-    setDraggingNode(null);
+    setDragOffsets(new Map());
   };
   
   const handleMouseLeave = () => {
-    setDraggingNode(null);
+    setDragOffsets(new Map());
     if (isConnecting) {
       setIsConnecting(null);
       setConnectingLine(null);
@@ -145,7 +168,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
   
   const handleCanvasClick = () => {
     if (!isConnectionMode && !isPacketSimulationMode) {
-        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
         setSelectedConnectionId(null);
     }
     setIsConnecting(null);
@@ -171,6 +194,8 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
     const y = (event.clientY - rect.top) / zoom;
 
     onAddComponent(type, x, y);
+    setSelectedNodeIds([]);
+    setSelectedConnectionId(null);
   };
 
   const getPacketPosition = (packet: AnimatedPacket) => {
@@ -221,6 +246,13 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
         )}
       <svg className="absolute top-0 left-0 w-full h-full">
          <style>{`
+          @keyframes pulse {
+            0%, 100% { stroke-opacity: 1; }
+            50% { stroke-opacity: 0.7; }
+          }
+          .connection-selected {
+            animation: pulse 2s infinite ease-in-out;
+          }
           @keyframes fadeInOut {
             0%, 100% { opacity: 0; }
             50% { opacity: 1; }
@@ -258,12 +290,18 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
           const isDisabled = isFromSwitchDisabled || isToSwitchDisabled || isMaliciouslyIsolated;
 
           const isSelected = conn.id === selectedConnectionId;
-          const strokeColor = isDisabled ? '#6b7280' : (isSelected ? '#facc15' : '#67e8f9');
-          const strokeOpacity = isDisabled ? 0.4 : (isSelected ? 1 : 0.5);
+          const isHovered = conn.id === hoveredConnectionId && !isSelected;
+          const strokeColor = isDisabled ? '#6b7280' : (isSelected ? '#fde047' : '#67e8f9');
+          const strokeOpacity = isDisabled ? 0.4 : (isSelected || isHovered ? 1 : 0.5);
           const strokeDash = isDisabled ? "5, 5" : undefined;
+          const strokeWidth = isSelected ? 5 : (isHovered ? 4 : 2);
 
           return (
-             <g key={conn.id} onClick={(e) => handleConnectionClick(e, conn.id)} className="cursor-pointer">
+             <g key={conn.id} 
+                onClick={(e) => handleConnectionClick(e, conn.id)} 
+                onMouseEnter={() => setHoveredConnectionId(conn.id)}
+                onMouseLeave={() => setHoveredConnectionId(null)}
+                className="cursor-pointer">
                 <line // Invisible thicker line for easier clicking
                     x1={fromNode.x} y1={fromNode.y}
                     x2={toNode.x} y2={toNode.y}
@@ -276,8 +314,8 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
                     stroke={strokeColor}
                     strokeOpacity={strokeOpacity}
                     strokeDasharray={strokeDash}
-                    strokeWidth={isSelected ? 4 : 2}
-                    className="transition-all duration-150"
+                    strokeWidth={strokeWidth}
+                    className={`transition-all duration-150 ${isSelected ? 'connection-selected' : ''}`}
                 />
             </g>
           );
@@ -346,7 +384,7 @@ const NetworkCanvas = forwardRef<HTMLDivElement, NetworkCanvasProps>(({
         })}
       </svg>
       {nodes.map((node, index) => {
-        const isSelected = selectedNodeId === node.id && !isConnectionMode && !isPacketSimulationMode;
+        const isSelected = selectedNodeIds.includes(node.id) && !isConnectionMode && !isPacketSimulationMode;
         const isConnSource = isConnecting === node.id;
         const isSimSource = packetSimSourceNodes.includes(node.id);
         const isWeak = weakNodeIds.includes(node.id);

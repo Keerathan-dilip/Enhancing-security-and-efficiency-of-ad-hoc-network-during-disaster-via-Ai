@@ -12,6 +12,8 @@ interface ToolbarProps {
   isPacketSimulationMode: boolean;
   onTogglePacketSimulationMode: () => void;
   onAutoConnect: (k: number) => void;
+  onConnectSelected: () => void;
+  numSelectedNodes: number;
   onDownloadReport: () => void;
   analysisPerformed: boolean;
   isDownloadingReport: boolean;
@@ -57,6 +59,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
     isPacketSimulationMode,
     onTogglePacketSimulationMode,
     onAutoConnect,
+    onConnectSelected,
+    numSelectedNodes,
     onDownloadReport,
     analysisPerformed,
     isDownloadingReport,
@@ -181,6 +185,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
        <div className="pt-4 border-t border-cyan-500/20">
         <h3 className="text-lg font-bold text-cyan-300 mb-2">Actions</h3>
+        <p className="text-xs text-gray-400 mb-2">Hold Shift to select multiple nodes.</p>
         <div className="space-y-3">
             <button
                 onClick={onToggleConnectionMode}
@@ -194,6 +199,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
                     <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8zM12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
                 </svg>
                 <span>{isConnectionMode ? 'Exit Connection Mode' : 'Connect Nodes'}</span>
+            </button>
+             <button
+                onClick={onConnectSelected}
+                disabled={numSelectedNodes !== 2}
+                className="w-full px-5 py-2.5 font-bold rounded-lg transition-all duration-300 flex items-center justify-center space-x-2 bg-cyan-600 text-white hover:bg-cyan-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+             >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0l-1.5-1.5a2 2 0 112.828-2.828l1.5 1.5 3-3zm-2.5 10a2 2 0 012.828 0l3 3a2 2 0 01-2.828 2.828l-3-3a2 2 0 010-2.828zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
+                <span>Connect Selected ({Math.min(numSelectedNodes, 2)}/2)</span>
             </button>
              <button
                 onClick={onTogglePacketSimulationMode}
