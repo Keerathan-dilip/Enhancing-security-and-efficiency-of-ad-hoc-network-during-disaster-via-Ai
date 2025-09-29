@@ -84,8 +84,22 @@ const Toolbar: React.FC<ToolbarProps> = ({
       onGenerateNetwork(generateCount, topology, includeRouters, includeSwitches, numClusterHeads);
   }
 
+  const showRouterOption = ['cluster', 'cluster-mesh', 'random', 'mesh', 'grid'].includes(topology);
+  const routerLabel = (topology === 'cluster' || topology === 'cluster-mesh')
+    ? 'Use Routers for Cluster Heads'
+    : 'Include Routers';
+
   return (
     <div className="bg-gray-800/60 rounded-lg shadow-xl border border-cyan-500/20 p-4 space-y-4">
+       <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+      `}</style>
       <div>
         <h3 className="text-lg font-bold text-cyan-300">Components</h3>
         <p className="text-xs text-gray-400 mb-2">Drag to canvas to add</p>
@@ -145,10 +159,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 </div>
              )}
              <div className="space-y-2">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" checked={includeRouters} onChange={e => setIncludeRouters(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
-                    <span className="text-sm text-gray-300">Use Routers for Cluster Heads</span>
-                </label>
+                {showRouterOption && (
+                    <label className="flex items-center space-x-2 cursor-pointer animate-fadeIn">
+                        <input type="checkbox" checked={includeRouters} onChange={e => setIncludeRouters(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
+                        <span className="text-sm text-gray-300">{routerLabel}</span>
+                    </label>
+                )}
                  <label className="flex items-center space-x-2 cursor-pointer">
                     <input type="checkbox" checked={includeSwitches} onChange={e => setIncludeSwitches(e.target.checked)} className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500" />
                     <span className="text-sm text-gray-300">Include Switches</span>

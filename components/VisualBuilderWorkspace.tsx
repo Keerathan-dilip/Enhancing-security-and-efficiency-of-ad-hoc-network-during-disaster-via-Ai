@@ -201,7 +201,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     setIsReportUpdating(true);
     const handler = setTimeout(() => {
         const maliciousNodes = nodes.filter(n => n.isMalicious).map(n => n.id);
-        const topology = networkAnalysisService.identifyTopology(nodes, connections);
+        const topology = networkAnalysisService.identifyTopology(nodes, connections, clusterHeadIds);
         const params = networkAnalysisService.simulatePerformance(topology, nodes, connections, maliciousNodes);
         setSimulationParams(params);
         setIsReportUpdating(false);
@@ -211,7 +211,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         clearTimeout(handler);
         setIsReportUpdating(false);
     };
-  }, [nodes, connections, hasAnalyzedOnce]);
+  }, [nodes, connections, hasAnalyzedOnce, clusterHeadIds]);
 
   const deleteSelectedConnection = useCallback(() => {
     if (selectedConnectionId) {
@@ -721,6 +721,33 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
         }
         newNodes.push(...gridNodes);
 
+        // Add grid connections
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const currentIndex = r * cols + c;
+                if (currentIndex >= gridNodes.length) continue;
+                const currentNode = gridNodes[currentIndex];
+
+                // Connect to right neighbor
+                if (c < cols - 1) {
+                    const rightIndex = r * cols + (c + 1);
+                    if (rightIndex < gridNodes.length) {
+                        const rightNode = gridNodes[rightIndex];
+                        newConnections.push({ id: `conn-grid-${currentNode.id}-${rightNode.id}`, from: currentNode.id, to: rightNode.id });
+                    }
+                }
+
+                // Connect to bottom neighbor
+                if (r < rows - 1) {
+                    const bottomIndex = (r + 1) * cols + c;
+                    if (bottomIndex < gridNodes.length) {
+                        const bottomNode = gridNodes[bottomIndex];
+                        newConnections.push({ id: `conn-grid-${currentNode.id}-${bottomNode.id}`, from: currentNode.id, to: bottomNode.id });
+                    }
+                }
+            }
+        }
+
         if (gridNodes.length > 0) {
             gridNodes.sort((a,b) => Math.hypot(a.x - baseStation.x, a.y - baseStation.y) - Math.hypot(b.x - baseStation.x, b.y - baseStation.y));
             const closestNode = gridNodes[0];
@@ -775,6 +802,38 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
                 const pNode = createNode(i + 1, centerX + radiusX * Math.cos(angle), centerY + radiusY * Math.sin(angle));
                 newNodes.push(pNode);
                 newConnections.push({ id: `${hubNode.id}-${pNode.id}-${Date.now()}`, from: pNode.id, to: hubNode.id });
+            }
+        }
+    }
+
+    // Ensure all nodes are part of a single connected component
+    if (newNodes.length > 1) {
+        const components = networkAnalysisService.findNetworkComponents(newNodes, newConnections);
+        if (components.length > 1) {
+            // Sort components by size, largest first
+            components.sort((a, b) => b.length - a.length);
+            const mainComponent = components.shift()!;
+
+            for (const isolatedComponent of components) {
+                let minDistance = Infinity;
+                let bestConnection: { from: string; to: string } | null = null;
+                
+                // Find the closest pair of nodes between the main component and the isolated one
+                for (const sourceNode of isolatedComponent) {
+                    for (const targetNode of mainComponent) {
+                        const distance = Math.hypot(sourceNode.x - targetNode.x, sourceNode.y - targetNode.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestConnection = { from: sourceNode.id, to: targetNode.id };
+                        }
+                    }
+                }
+
+                if (bestConnection) {
+                    newConnections.push({ id: `${bestConnection.from}-${bestConnection.to}-${Date.now()}`, from: bestConnection.from, to: bestConnection.to });
+                    // Conceptually merge the component for the next iteration if there were more than 2
+                    mainComponent.push(...isolatedComponent);
+                }
             }
         }
     }
@@ -885,7 +944,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
       const maliciousNodeIds = nodes.filter(n => n.isMalicious).map(n => n.id);
       setIsolatedMaliciousNodeIds(maliciousNodeIds); // Simulate AI isolating the nodes
 
-      const topology = networkAnalysisService.identifyTopology(nodes, connections);
+      const topology = networkAnalysisService.identifyTopology(nodes, connections, clusterHeadIds);
       
       const descriptionPromise = geminiService.getTopologyDescription(topology);
       const insightsPromise = (async () => {
@@ -1079,7 +1138,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     const newNodes = nodes.filter(n => !weakNodeIds.includes(n.id));
     let newConnections: Connection[] = [];
 
-    const topology = networkAnalysisService.identifyTopology(newNodes, connections);
+    const topology = networkAnalysisService.identifyTopology(newNodes, connections, clusterHeadIds);
     const isClusterTopology = topology.toLowerCase().includes('cluster');
 
     if (isClusterTopology) {
@@ -1180,7 +1239,7 @@ const VisualBuilderWorkspace: React.FC<VisualBuilderWorkspaceProps> = ({ nodes, 
     if (newNodes.length >= 2) {
       setIsGeneratingInsights(true);
       try {
-        const newTopology = networkAnalysisService.identifyTopology(newNodes, newConnections);
+        const newTopology = networkAnalysisService.identifyTopology(newNodes, newConnections, remainingClusterHeadIds);
         const descriptionPromise = geminiService.getTopologyDescription(newTopology);
         const insightsPromise = (async () => {
             const networkData = networkAnalysisService.getNetworkStats(newNodes, newConnections);

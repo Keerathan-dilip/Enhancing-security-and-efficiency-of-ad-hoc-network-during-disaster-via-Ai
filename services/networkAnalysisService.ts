@@ -1,4 +1,3 @@
-
 import { Node, Connection, SimulationParameters, NetworkComponentType } from '../types';
 import { SIMULATION_RESULTS } from '../constants';
 
@@ -44,54 +43,102 @@ class NetworkAnalysisService {
     };
   }
 
-  public identifyTopology(nodes: Node[], connections: Connection[]): string {
-    if (nodes.length < 3) return 'Linear';
-    
+  public identifyTopology(nodes: Node[], connections: Connection[], clusterHeadIds: string[] = []): string {
+    const nodeCount = nodes.length;
+    if (nodeCount < 3) return 'Linear Topology';
+
     const adjacency: { [key: string]: string[] } = {};
-    nodes.forEach(n => adjacency[n.id] = []);
+    nodes.forEach(n => { adjacency[n.id] = []; });
     connections.forEach(c => {
-      adjacency[c.from]?.push(c.to);
-      adjacency[c.to]?.push(c.from);
+        if (adjacency[c.from] && adjacency[c.to]) {
+            adjacency[c.from].push(c.to);
+            adjacency[c.to].push(c.from);
+        }
     });
 
-    const nodeDegrees = nodes.map(n => adjacency[n.id]?.length || 0);
+    const nodeDegrees = new Map<string, number>();
+    nodes.forEach(n => nodeDegrees.set(n.id, adjacency[n.id]?.length || 0));
 
-    // Check for Star: one central node connected to all others
-    if (nodeDegrees.filter(d => d === nodes.length - 1).length === 1) {
-      return 'Star Topology';
-    }
+    // --- 1. Check for Cluster topology based on explicit cluster heads ---
+    if (clusterHeadIds.length > 0) {
+        const clusterHeads = nodes.filter(n => clusterHeadIds.includes(n.id));
+        if (clusterHeads.length > 0) {
+            // Check if non-head nodes are primarily connected to heads
+            const endNodes = nodes.filter(n => !clusterHeadIds.includes(n.id) && n.type !== NetworkComponentType.BASE_STATION);
+            let clusterConnections = 0;
+            endNodes.forEach(en => {
+                const neighbors = adjacency[en.id] || [];
+                if (neighbors.some(neighborId => clusterHeadIds.includes(neighborId))) {
+                    clusterConnections++;
+                }
+            });
 
-    // Check for Bus: two nodes with degree 1, rest with degree 2
-    const degreeOneNodes = nodeDegrees.filter(d => d === 1).length;
-    const degreeTwoNodes = nodeDegrees.filter(d => d === 2).length;
-    if (degreeOneNodes === 2 && degreeTwoNodes === nodes.length - 2) {
-        return 'Bus Topology';
-    }
-
-    // Check for Ring: every node has exactly 2 connections
-    if (nodeDegrees.every(d => d === 2)) {
-      return 'Ring Topology';
-    }
-
-    const avgDegree = nodeDegrees.reduce((a, b) => a + b, 0) / nodes.length;
-
-    // Check for dense Mesh
-    if (avgDegree > 4) {
-      return 'Mesh Topology';
-    }
-
-    // Check for Cluster Mesh
-    const highDegreeNodes = nodeDegrees.filter(d => d > 5).length;
-    if (highDegreeNodes > 1 && highDegreeNodes < nodes.length / 4 && avgDegree > 2.5) {
-      return 'Cluster Mesh Topology';
-    }
-
-    // Check for standard Mesh
-    if (avgDegree > 3) {
-      return 'Mesh Topology';
+            // If a significant number of end nodes connect to heads, it's a cluster.
+            if (endNodes.length > 0 && clusterConnections / endNodes.length > 0.5) {
+                // Check for mesh-like connections within clusters or between heads
+                const avgHeadDegree = clusterHeads.reduce((sum, h) => sum + (nodeDegrees.get(h.id) || 0), 0) / clusterHeads.length;
+                if (avgHeadDegree > clusterHeads.length) { // A heuristic
+                     return 'Cluster Mesh Topology';
+                }
+                return 'Cluster Topology';
+            }
+        }
     }
     
-    return 'Cluster / Hybrid Topology';
+    // --- 2. Check for strict, degree-based topologies ---
+    const degrees = Array.from(nodeDegrees.values());
+    const centralNode = nodes.find(n => (nodeDegrees.get(n.id) || 0) >= nodeCount - 2);
+    // Star: one central node connected to almost all others
+    if (centralNode && (centralNode.type === NetworkComponentType.BASE_STATION || centralNode.type === NetworkComponentType.SWITCH)) {
+        return 'Star Topology';
+    }
+
+    // Ring: all nodes have degree 2
+    if (degrees.every(d => d === 2)) {
+        return 'Ring Topology';
+    }
+
+    // Bus: two nodes with degree 1, rest with degree 2
+    const degreeOneCount = degrees.filter(d => d === 1).length;
+    const degreeTwoCount = degrees.filter(d => d === 2).length;
+    if (degreeOneCount === 2 && degreeTwoCount === nodeCount - 2) {
+        return 'Bus Topology';
+    }
+    
+    // --- 3. Differentiate between Mesh and other topologies ---
+    const avgDegree = degrees.reduce((a, b) => a + b, 0) / nodeCount;
+    const components = this.findNetworkComponents(nodes, connections);
+
+    // Mesh: highly connected, robust (often one single component)
+    if (components.length <= 2 && avgDegree > 2.5) { // Allow for a single isolated node
+        // Check for grid-like spatial distribution
+        const nodePositions = nodes.map(n => ({x: n.x, y: n.y}));
+        const xCoords = [...new Set(nodePositions.map(p => p.x))].sort((a,b) => a - b);
+        const yCoords = [...new Set(nodePositions.map(p => p.y))].sort((a,b) => a - b);
+        
+        // A simple heuristic for grid: if nodes align well on X/Y coordinates
+        if (xCoords.length > 2 && yCoords.length > 2) {
+            const xGaps = xCoords.slice(1).map((x, i) => x - xCoords[i]);
+            const yGaps = yCoords.slice(1).map((y, i) => y - yCoords[i]);
+            const avgXGap = xGaps.reduce((a,b) => a + b, 0) / xGaps.length;
+            const avgYGap = yGaps.reduce((a,b) => a + b, 0) / yGaps.length;
+            const xStdDev = Math.sqrt(xGaps.map(g => (g - avgXGap) ** 2).reduce((a,b) => a+b, 0) / xGaps.length);
+            const yStdDev = Math.sqrt(yGaps.map(g => (g - avgYGap) ** 2).reduce((a,b) => a+b, 0) / yGaps.length);
+
+            if (avgXGap > 0 && xStdDev / avgXGap < 0.3 && avgYGap > 0 && yStdDev / avgYGap < 0.3 && xCoords.length * yCoords.length >= nodeCount * 0.7) {
+                return 'Grid Topology';
+            }
+        }
+
+        return 'Mesh Topology';
+    }
+
+    // --- 4. Fallback for everything else ---
+    if (components.length > 2) {
+        return `Hybrid Topology (${components.length} disconnected components)`;
+    }
+
+    return 'Hybrid Topology';
   }
 
   public findNetworkComponents(nodes: Node[], connections: Connection[]): Node[][] {
